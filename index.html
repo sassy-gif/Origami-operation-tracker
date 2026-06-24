@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Origami — Operations Tracker</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="authwrap" id="authwrap">
+    <div class="authcard">
+      <div class="ahead">
+        <div class="mark">ORIGAMI</div>
+        <div class="tag">Operations</div>
+      </div>
+      <div class="abody">
+        <div class="field"><label>Work email</label><input type="email" id="loginEmail" autocomplete="username" /></div>
+        <div class="field"><label>Password</label><input type="password" id="loginPass" autocomplete="current-password" /></div>
+        <div class="autherr" id="loginErr"></div>
+        <button class="btn" id="loginBtn" style="width:100%">Sign in</button>
+      </div>
+    </div>
+  </div>
+
+  <aside class="side" id="side" style="display:none">
+    <div class="brand">
+      <div class="mark">ORIGAMI</div>
+      <div class="tag">Operations</div>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-view="dashboard" class="on"><span class="ic"></span> Dashboard</button>
+      <button data-view="clients"><span class="ic"></span> Clients</button>
+      <button data-view="projects"><span class="ic"></span> Projects</button>
+      <button data-view="team"><span class="ic"></span> Team</button>
+      <button data-view="tasks"><span class="ic"></span> Tasks</button>
+    </nav>
+    <div class="who">
+      Signed in as<br><span class="you" id="whoEmail"></span>
+      <button id="signOutBtn">Sign out</button>
+    </div>
+    <div class="foot">Strategy &middot; Growth &middot; Excellence<br>Shared with your team &middot; saved automatically.</div>
+  </aside>
+
+  <main class="main" id="main" style="display:none">
+    <div class="top">
+      <div>
+        <div class="eyebrow" id="eyebrow">Command Center</div>
+        <h1 id="title">Dashboard</h1>
+      </div>
+      <div class="spacer"></div>
+      <input class="search" id="search" placeholder="Search..." style="display:none" />
+      <button class="btn" id="addBtn" style="display:none">+ Add</button>
+    </div>
+    <div class="content" id="content"></div>
+  </main>
+
+  <div class="overlay" id="overlay">
+    <div class="modal" id="modal"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+</body>
+</html>
