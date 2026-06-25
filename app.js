@@ -1,28 +1,35 @@
-
+console.log("JS is running 🚀");
 "use strict";
 
-/* =====================================================================
-   FIREBASE SETUP
-   Replace the values below with your own project's config.
-   Get this from: Firebase Console -> Project settings -> General ->
-   "Your apps" -> Web app -> SDK setup and configuration.
-===================================================================== */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
-  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updateEmail,
+  updatePassword
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
-  getFirestore, collection, doc, getDocs, setDoc, deleteDoc, onSnapshot
+  getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
+console.log("Firebase file loaded");
+
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_API_KEY",
-  authDomain: "REPLACE_WITH_YOUR_PROJECT.firebaseapp.com",
-  projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
-  storageBucket: "REPLACE_WITH_YOUR_PROJECT.appspot.com",
-  messagingSenderId: "REPLACE_WITH_YOUR_SENDER_ID",
-  appId: "REPLACE_WITH_YOUR_APP_ID"
+  apiKey: "AIzaSyDPaZC-3BhFuTsfdnTQmgjjQLsYHkw7ZR0",
+  authDomain: "origami-tracker.firebaseapp.com",
+  projectId: "origami-tracker",
+  storageBucket: "origami-tracker.firebasestorage.app",
+  messagingSenderId: "248992245803",
+  appId: "1:248992245803:web:0eed4d8c515dc9cbd7a26e",
+  measurementId: "G-J7GF6YTBH6"
 };
+
 
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
@@ -30,10 +37,18 @@ const db = getFirestore(fbApp);
 
 /* ---------------------------------------------------------------- */
 
-let DB = { clients:[], projects:[], team:[], tasks:[] };
+setDoc(doc(db, "test", "hello"), {
+  message: "Firebase is alive 🚀",
+  time: Date.now()
+})
+.then(() => console.log("WRITE SUCCESS"))
+.catch((err) => console.log("WRITE ERROR:", err));
+
+let DB = { clients:[], projects:[], team:[], tasks:[], users:[] };
 let view = "dashboard";
 let q = "";
 let currentUser = null;
+let currentUserRole = null; // "boss" | "employee" | "pending" | null
 let unsubscribers = [];
 
 const $ = (s,el=document)=>el.querySelector(s);
@@ -42,7 +57,7 @@ const today = ()=> new Date().toISOString().slice(0,10);
 const money = n => (Number(n)||0).toLocaleString("en-US") + " ETB";
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-const COLLECTIONS = ["clients","projects","team","tasks"];
+const COLLECTIONS = ["clients","projects","team","tasks","users"];
 
 /* ---------- Firestore live sync ---------- */
 function startSync(){
@@ -175,25 +190,37 @@ function dueLabel(date){
 function render(){
   if(!currentUser) return;
   $("#nav").querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.view===view));
-  const titles={dashboard:"Dashboard",clients:"Clients",projects:"Projects",team:"Team",tasks:"Tasks"};
-  const eyebrows={dashboard:"Command Center",clients:"Accounts",projects:"Engagements",team:"People",tasks:"Workstream"};
+  $("#nav").querySelectorAll("button").forEach(b=>{
+    const v = b.dataset.view;
+const employeeAllowed = ["dashboard","projects","tasks","profile","calendar"];
+    const visible = currentUserRole==="boss" || employeeAllowed.includes(v);
+    b.style.display = visible ? "" : "none";
+  });
+ const titles={dashboard:"Dashboard",clients:"Clients",projects:"Projects",team:"Team",tasks:"Tasks",profile:"Profile",calendar:"Calendar"};
+const eyebrows={dashboard:"Command Center",clients:"Accounts",projects:"Engagements",team:"People",tasks:"Workstream",profile:"Your account",calendar:"Schedule"};
   $("#title").textContent=titles[view];
   $("#eyebrow").textContent=eyebrows[view];
   const onList = view!=="dashboard";
   $("#search").style.display = onList?"block":"none";
   $("#addBtn").style.display = onList?"block":"none";
   $("#addBtn").textContent = "+ Add " + ({clients:"client",projects:"project",team:"member",tasks:"task"}[view]||"");
-  if(view==="dashboard") renderDashboard();
-  if(view==="clients") renderClients();
-  if(view==="projects") renderProjects();
-  if(view==="team") renderTeam();
-  if(view==="tasks") renderTasks();
+ if(view==="dashboard") renderDashboard();
+if(view==="clients") renderClients();
+if(view==="projects") renderProjects();
+if(view==="team") renderTeam();
+if(view==="tasks") renderTasks();
+if(view==="profile") renderProfile();
+if(view==="calendar") renderCalendar();
 }
 
 /* ---------- dashboard ---------- */
 function renderDashboard(){
   const activeClients = DB.clients.filter(c=>c.status==="Active").length;
   const openProjects = DB.projects.filter(isOpenProject);
+  const visibleProjectsForRing = currentUserRole==="boss" ? DB.projects : DB.projects.filter(p=>p.ownerId===currentUser.uid);
+const visibleTasksForRing = currentUserRole==="boss" ? DB.tasks : DB.tasks.filter(k=>k.assigneeId===currentUser.uid);
+const projDonePct = visibleProjectsForRing.length ? Math.round(visibleProjectsForRing.filter(p=>p.status==="Delivered").length / visibleProjectsForRing.length * 100) : 0;
+const taskDonePct = visibleTasksForRing.length ? Math.round(visibleTasksForRing.filter(k=>k.status==="Done").length / visibleTasksForRing.length * 100) : 0;
   const overdue = openProjects.filter(p=>p.due && p.due<today()).length
                 + DB.tasks.filter(k=>isOpenTask(k) && k.due && k.due<today()).length;
   const pipeline = openProjects.reduce((s,p)=>s+(Number(p.fee)||0),0);
@@ -340,29 +367,118 @@ function renderTeam(){
       <td>${ot}</td>
       <td>${acts(m.id)}</td>
     </tr>`;}).join("") : emptyRow(5,"Add your team members.");
-  $("#content").innerHTML = tableShell(["Name","Role","Open projects","Open tasks",""], html, rows.length);
+
+  let usersHtml = "";
+  if(currentUserRole === "boss"){
+    const userRows = DB.users.map(u=>`
+      <tr>
+        <td>${esc(u.email)}</td>
+        <td>
+          <select data-role-uid="${u.id}">
+            <option value="pending" ${u.role==="pending"?"selected":""}>Pending</option>
+            <option value="employee" ${u.role==="employee"?"selected":""}>Employee</option>
+            <option value="boss" ${u.role==="boss"?"selected":""}>Boss</option>
+          </select>
+        </td>
+      </tr>`).join("");
+    usersHtml = `
+      <div class="panel" style="margin-top:18px">
+        <h3>User access</h3>
+        <div class="body">
+          <table>
+            <thead><tr><th>Email</th><th>Role</th></tr></thead>
+            <tbody>${userRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  $("#content").innerHTML = tableShell(["Name","Role","Open projects","Open tasks",""], html, rows.length) + usersHtml;
   wireRows("team");
   $("#exportBtn").onclick=()=>exportCSV("team",DB.team,[["name","Name"],["role","Role"]]);
+
+  if(currentUserRole === "boss"){
+    $("#content").querySelectorAll("[data-role-uid]").forEach(sel=>{
+      sel.onchange = async ()=>{
+        const uid = sel.dataset.roleUid;
+        const newRole = sel.value;
+        await setDoc(doc(db,"users",uid), { role:newRole }, { merge:true });
+        toast("Role updated.");
+      };
+    });
+  }
 }
 
 /* ---------- tasks ---------- */
+
 function renderTasks(){
-  const rows = DB.tasks.filter(k=>match({...k,_p:projTitle(k.projectId),_a:teamName(k.assigneeId)}));
-  const html = rows.length? rows.map(k=>`
-    <tr>
-      <td><div class="name">${esc(k.title)}</div><div class="meta">${esc(projTitle(k.projectId))}</div></td>
-      <td>${esc(teamName(k.assigneeId))}</td>
-      <td>${statusPill(k.status)}</td>
-      <td><span class="when ${dueClass(k.due,isOpenTask(k))}" style="font-weight:700">${k.due?dueLabel(k.due):"\u2014"}</span></td>
-      <td>${acts(k.id)}</td>
-    </tr>`).join("") : emptyRow(5,"Add a task to build your workstream.");
-  $("#content").innerHTML = tableShell(["Task","Assignee","Status","Due",""], html, rows.length);
-  wireRows("tasks");
+  const visibleTasks = currentUserRole==="boss" ? DB.tasks : DB.tasks.filter(k=>k.assigneeId===currentUser.uid);
+  const rows = visibleTasks.filter(k=>match({...k,_p:projTitle(k.projectId),_a:teamName(k.assigneeId)}));
+
+  const cardsHtml = rows.length ? rows.map(k=>{
+    const isDone = k.status==="Done";
+    const isDoing = k.status==="Doing";
+    return `
+    <div class="task-card ${isDone?'done':''}">
+      <div class="task-check ${isDone?'checked':''}" data-toggle-done="${k.id}">${isDone?"&#10003;":""}</div>
+      <div class="task-body">
+        <div class="task-card-top">
+          <div>
+            <div class="task-card-title">${esc(k.title)}</div>
+            <div class="task-card-meta">${esc(projTitle(k.projectId))} &middot; ${esc(teamName(k.assigneeId))}</div>
+          </div>
+          <span class="when ${dueClass(k.due,isOpenTask(k))}">${k.due?dueLabel(k.due):"\u2014"}</span>
+        </div>
+        <div class="task-card-bottom">
+          <div class="doing-tag ${isDoing?'active':''} ${isDone?'disabled':''}" data-toggle-doing="${k.id}">Doing</div>
+          <div class="task-icons">
+            <span class="ticon" data-edit="${k.id}" title="Edit">&#9998;</span>
+            ${currentUserRole==="boss" ? `<span class="ticon del" data-del="${k.id}" title="Delete">&#10005;</span>` : ""}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join("") : `<div class="empty"><b>Nothing here yet</b>Add a task to build your workstream.</div>`;
+
+  $("#content").innerHTML = `
+    <div class="tabletools">
+      <span class="count">${rows.length} ${rows.length===1?"task":"tasks"}</span>
+      <span class="spacer"></span>
+      <button class="linkbtn" id="exportBtn">Export CSV</button>
+    </div>
+    <div class="task-cards">${cardsHtml}</div>
+  `;
+  $("#content").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openModal("tasks",b.dataset.edit));
+  $("#content").querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>del("tasks",b.dataset.del));
+
+  $("#content").querySelectorAll("[data-toggle-done]").forEach(el=>{
+    el.onclick = async ()=>{
+      const id = el.dataset.toggleDone;
+      const task = DB.tasks.find(t=>t.id===id);
+      if(!task) return;
+      const newStatus = task.status==="Done" ? "To do" : "Done";
+      await saveRecord("tasks", {...task, status:newStatus});
+    };
+  });
+
+  $("#content").querySelectorAll("[data-toggle-doing]").forEach(el=>{
+    el.onclick = async ()=>{
+      const id = el.dataset.toggleDoing;
+      const task = DB.tasks.find(t=>t.id===id);
+      if(!task || task.status==="Done") return;
+      const newStatus = task.status==="Doing" ? "To do" : "Doing";
+      await saveRecord("tasks", {...task, status:newStatus});
+    };
+  });
+
+  $("#exportBtn").onclick=()=>exportCSV("tasks",DB.tasks,
+    [["title","Task"],["_project","Project"],["_assignee","Assignee"],["status","Status"],["due","Due"]],
+    k=>({...k,_project:projTitle(k.projectId),_assignee:teamName(k.assigneeId)}));
+
   $("#exportBtn").onclick=()=>exportCSV("tasks",DB.tasks,
     [["title","Task"],["_project","Project"],["_assignee","Assignee"],["status","Status"],["due","Due"]],
     k=>({...k,_project:projTitle(k.projectId),_assignee:teamName(k.assigneeId)}));
 }
-
 function wireRows(coll){
   $("#content").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openModal(coll,b.dataset.edit));
   $("#content").querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>del(coll,b.dataset.del));
@@ -492,14 +608,22 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
 /* ---------- auth ---------- */
 function showApp(){
   $("#authwrap").style.display="none";
+  $("#pendingScreen").style.display="none";
   $("#side").style.display="flex";
   $("#main").style.display="flex";
   $("#whoEmail").textContent = currentUser.email;
 }
 function showAuth(){
   $("#authwrap").style.display="flex";
+  $("#pendingScreen").style.display="none";
   $("#side").style.display="none";
   $("#main").style.display="none";
+}
+function showPending(){
+  $("#authwrap").style.display="none";
+  $("#side").style.display="none";
+  $("#main").style.display="none";
+  $("#pendingScreen").style.display="flex";
 }
 
 $("#loginBtn").onclick = async ()=>{
@@ -515,22 +639,181 @@ $("#loginBtn").onclick = async ()=>{
 };
 $("#loginPass").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#loginBtn").click(); });
 $("#loginEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#loginBtn").click(); });
-
 $("#signOutBtn").onclick = async ()=>{
-  stopSync();
+  console.log("Sign out button clicked");
+  try{
+    stopSync();
+    await signOut(auth);
+    console.log("Sign out succeeded");
+  }catch(e){
+    console.log("Sign out FAILED:", e);
+  }
+};
+$("#pendingSignOutBtn").onclick = async ()=>{
   await signOut(auth);
 };
+$("#signupBtn").onclick = async () => {
+  const email = $("#loginEmail").value.trim();
+  const pass = $("#loginPass").value;
 
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    const derivedName = email.split("@")[0];
+    await setDoc(doc(db, "users", cred.user.uid), {
+      email,
+      name: derivedName,
+      role: "pending"
+    });
+    console.log("USER CREATED, role: pending");
+  } catch (e) {
+    console.log(e.message);
+  }
+};
 onAuthStateChanged(auth, async (user)=>{
   if(user){
     currentUser = user;
+
+    const userDocSnap = await getDoc(doc(db, "users", user.uid));
+    if(userDocSnap.exists()){
+      currentUserRole = userDocSnap.data().role;
+    } else {
+      currentUserRole = "pending";
+    }
+    console.log("Logged in as:", user.email, "role:", currentUserRole);
+
+    if(currentUserRole === "pending"){
+      showPending();
+      return;
+    }
+
     showApp();
     await seedIfEmpty();
     startSync();
     render();
   }else{
     currentUser = null;
+    currentUserRole = null;
     stopSync();
     showAuth();
   }
-});
+}); function renderProfile(){
+  const myUserDoc = DB.users.find(u=>u.id===currentUser.uid) || {};
+  $("#content").innerHTML = `
+    <div class="panel" style="max-width:480px">
+      <h3>Your profile</h3>
+      <div class="form">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" id="profileName" value="${esc(myUserDoc.name||"")}" />
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="profileEmail" value="${esc(currentUser.email||"")}" />
+        </div>
+        <div class="field">
+          <label>New password (leave blank to keep current)</label>
+          <input type="password" id="profilePassword" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" />
+        </div>
+        <div class="field">
+          <label>Current password (required to save email/password changes)</label>
+          <input type="password" id="profileCurrentPassword" placeholder="Confirm it's you" />
+        </div>
+        <div class="autherr" id="profileErr"></div>
+        <button class="btn" id="profileSaveBtn" style="width:100%">Save changes</button>
+      </div>
+    </div>
+  `;
+  wireProfileForm();
+}
+function wireProfileForm(){
+  $("#profileSaveBtn").onclick = async ()=>{
+    const newName = $("#profileName").value.trim();
+    const newEmail = $("#profileEmail").value.trim();
+    const newPassword = $("#profilePassword").value;
+    const currentPassword = $("#profileCurrentPassword").value;
+    $("#profileErr").textContent = "";
+
+    const emailChanged = newEmail !== currentUser.email;
+    const passwordChanged = newPassword.length > 0;
+
+    if((emailChanged || passwordChanged) && !currentPassword){
+      $("#profileErr").textContent = "Enter your current password to change email or password.";
+      return;
+    }
+
+    try{
+      if(emailChanged || passwordChanged){
+        const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+        await reauthenticateWithCredential(currentUser, credential);
+      }
+      if(emailChanged){
+        await updateEmail(currentUser, newEmail);
+      }
+      if(passwordChanged){
+        await updatePassword(currentUser, newPassword);
+      }
+      await setDoc(doc(db,"users",currentUser.uid), { name:newName, email:newEmail }, { merge:true });
+
+      toast("Profile updated.");
+      $("#profilePassword").value="";
+      $("#profileCurrentPassword").value="";
+    }catch(e){
+      console.log(e);
+      $("#profileErr").textContent = "Could not save \u2014 " + (e.code==="auth/wrong-password" ? "current password is incorrect." : e.code==="auth/requires-recent-login" ? "please sign out and back in, then try again." : "please try again.");
+    }
+  };
+}
+let calendarMonth = new Date().getMonth();
+let calendarYear = new Date().getFullYear();
+
+function renderCalendar(){
+  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const firstDay = new Date(calendarYear, calendarMonth, 1);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = new Date(calendarYear, calendarMonth+1, 0).getDate();
+  const todayStr = today();
+
+  const dueItems = [
+    ...DB.projects.filter(p=>isOpenProject(p) && p.due && (currentUserRole==="boss" || p.ownerId===currentUser.uid)).map(p=>({date:p.due, label:p.title, type:"Project"})),
+    ...DB.tasks.filter(k=>isOpenTask(k) && k.due && (currentUserRole==="boss" || k.assigneeId===currentUser.uid)).map(k=>({date:k.due, label:k.title, type:"Task"}))
+  ];
+
+  let cells = "";
+  for(let i=0;i<startWeekday;i++){
+    cells += `<div class="cal-cell empty"></div>`;
+  }
+  for(let day=1; day<=daysInMonth; day++){
+    const dateStr = `${calendarYear}-${String(calendarMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    const dayItems = dueItems.filter(it=>it.date===dateStr);
+    const isToday = dateStr===todayStr;
+    cells += `
+      <div class="cal-cell ${isToday?"today":""}">
+        <div class="cal-daynum">${day}</div>
+        ${dayItems.map(it=>`<div class="cal-item ${it.type.toLowerCase()}">${esc(it.label)}</div>`).join("")}
+      </div>`;
+  }
+
+  $("#content").innerHTML = `
+    <div class="cal-header">
+      <button class="btn ghost" id="calPrevBtn">&lt; Prev</button>
+      <h2>${monthNames[calendarMonth]} ${calendarYear}</h2>
+      <button class="btn ghost" id="calNextBtn">Next &gt;</button>
+    </div>
+    <div class="cal-grid">
+      <div class="cal-weekday">Sun</div><div class="cal-weekday">Mon</div><div class="cal-weekday">Tue</div>
+      <div class="cal-weekday">Wed</div><div class="cal-weekday">Thu</div><div class="cal-weekday">Fri</div><div class="cal-weekday">Sat</div>
+      ${cells}
+    </div>
+  `;
+
+  $("#calPrevBtn").onclick = ()=>{
+    calendarMonth--;
+    if(calendarMonth<0){ calendarMonth=11; calendarYear--; }
+    renderCalendar();
+  };
+  $("#calNextBtn").onclick = ()=>{
+    calendarMonth++;
+    if(calendarMonth>11){ calendarMonth=0; calendarYear++; }
+    renderCalendar();
+  };
+}
