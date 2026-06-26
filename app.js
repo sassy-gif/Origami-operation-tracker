@@ -215,6 +215,7 @@ if(view==="calendar") renderCalendar();
 
 /* ---------- dashboard ---------- */
 function renderDashboard(){
+  const teamPreview = currentUserRole==="boss" ? DB.team.slice(0,4) : [];
   const activeClients = DB.clients.filter(c=>c.status==="Active").length;
   const openProjects = DB.projects.filter(isOpenProject);
   const visibleProjectsForRing = currentUserRole==="boss" ? DB.projects : DB.projects.filter(p=>p.ownerId===currentUser.uid);
@@ -242,7 +243,27 @@ const taskDonePct = visibleTasksForRing.length ? Math.round(visibleTasksForRing.
     ...DB.tasks.filter(k=>isOpenTask(k)&&k.due).map(k=>({type:"Task",label:k.title,due:k.due,open:true}))
   ].sort((a,b)=>a.due<b.due?-1:1).slice(0,7);
 
-  $("#content").innerHTML = `
+ $("#content").innerHTML = `
+    <div class="dash-hero">
+      <div class="ring-block">
+        <svg width="84" height="84" viewBox="0 0 84 84">
+          <circle cx="42" cy="42" r="36" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="8"/>
+          <circle cx="42" cy="42" r="36" fill="none" stroke="var(--gold,#D9A8E8)" stroke-width="8" stroke-linecap="round"
+            stroke-dasharray="${2*Math.PI*36}" stroke-dashoffset="${2*Math.PI*36 - (projDonePct/100)*2*Math.PI*36}"
+            transform="rotate(-90 42 42)"/>
+        </svg>
+        <div class="ring-label"><div class="ring-pct">${projDonePct}%</div><div class="ring-sub">Projects done</div></div>
+      </div>
+      <div class="ring-block">
+        <svg width="84" height="84" viewBox="0 0 84 84">
+          <circle cx="42" cy="42" r="36" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="8"/>
+          <circle cx="42" cy="42" r="36" fill="none" stroke="var(--blue,#4a90d9)" stroke-width="8" stroke-linecap="round"
+            stroke-dasharray="${2*Math.PI*36}" stroke-dashoffset="${2*Math.PI*36 - (taskDonePct/100)*2*Math.PI*36}"
+            transform="rotate(-90 42 42)"/>
+        </svg>
+        <div class="ring-label"><div class="ring-pct">${taskDonePct}%</div><div class="ring-sub">Tasks done</div></div>
+      </div>
+    </div>
     <div class="kpis">
       <div class="kpi"><div class="label">Active clients</div><div class="val">${activeClients}</div><div class="sub">${DB.clients.length} total accounts</div></div>
       <div class="kpi"><div class="label">Open projects</div><div class="val">${openProjects.length}</div><div class="sub">${DB.projects.length} all-time</div></div>
@@ -283,8 +304,79 @@ const taskDonePct = visibleTasksForRing.length ? Math.round(visibleTasksForRing.
         }).join("")}</ul>` : `<div class="empty"><b>Nothing pending</b>You're all caught up.</div>`}
       </div>
     </div>
+<div class="panel" style="margin-top:18px">
+      <h3>Due soon &amp; overdue</h3>
+      <div class="body">
+        ${due.length? `<ul class="duelist">${due.map(d=>{
+          const cl=dueClass(d.due,true);
+          return `<li>${statusPill(d.type==="Project"?"Review":"Doing").replace(/Review|Doing/,d.type)}<span>${esc(d.label)}</span><span class="when ${cl}">${dueLabel(d.due)}</span></li>`;
+        }).join("")}</ul>` : `<div class="empty"><b>Nothing pending</b>You're all caught up.</div>`}
+      </div>
+    </div>
+    ${teamPreview.length ? `
+    <div class="panel preview-card" style="margin-top:18px" id="teamPreviewCard">
+      <h3>Team</h3>
+      <div class="body">
+        ${teamPreview.map(m=>`
+          <div class="preview-row">
+            <div class="avatar-circle small">${esc((m.name||"?").charAt(0).toUpperCase())}</div>
+            <div class="preview-row-text">
+              <div class="pr-name">${esc(m.name)}</div>
+              <div class="pr-sub">${esc(m.role||"\u2014")}</div>
+            </div>
+          </div>`).join("")}
+        <div class="preview-seemore">See all team &rarr;</div>
+      </div>
+    </div>` : ""}
   `;
 }
+$("#globalSearch").addEventListener("input", e=>{
+  const term = e.target.value.trim().toLowerCase();
+  const resultsEl = $("#globalSearchResults");
+  if(!term){ resultsEl.innerHTML=""; resultsEl.style.display="none"; return; }
+
+  const results = [];
+  DB.clients.forEach(c=>{
+    if(c.name && c.name.toLowerCase().includes(term)) results.push({type:"Client", label:c.name, goto:"clients"});
+  });
+  DB.projects.forEach(p=>{
+    if((currentUserRole==="boss" || p.ownerId===currentUser.uid) && p.title && p.title.toLowerCase().includes(term)) results.push({type:"Project", label:p.title, goto:"projects"});
+  });
+  DB.tasks.forEach(k=>{
+    if((currentUserRole==="boss" || k.assigneeId===currentUser.uid) && k.title && k.title.toLowerCase().includes(term)) results.push({type:"Task", label:k.title, goto:"tasks"});
+  });
+  DB.team.forEach(m=>{
+    if(currentUserRole==="boss" && m.name && m.name.toLowerCase().includes(term)) results.push({type:"Team", label:m.name, goto:"team"});
+  });
+
+  if(!results.length){
+    resultsEl.innerHTML = `<div class="gsr-empty">No matches</div>`;
+  }else{
+    resultsEl.innerHTML = results.slice(0,8).map(r=>`
+      <div class="gsr-item" data-goto="${r.goto}">
+        <span class="gsr-type">${r.type}</span>
+        <span class="gsr-label">${esc(r.label)}</span>
+      </div>`).join("");
+    resultsEl.querySelectorAll("[data-goto]").forEach(el=>{
+      el.onclick = ()=>{
+        view = el.dataset.goto;
+        $("#globalSearch").value="";
+        resultsEl.innerHTML=""; resultsEl.style.display="none";
+        if($("#teamPreviewCard")){
+    $("#teamPreviewCard").onclick = ()=>{ view="team"; render(); };
+  }
+        render();
+      };
+    });
+  }
+  resultsEl.style.display="block";
+});
+
+document.addEventListener("click", e=>{
+  if(!e.target.closest(".global-search-wrap")){
+    $("#globalSearchResults").style.display="none";
+  }
+});
 
 /* ---------- generic list helpers ---------- */
 function tableShell(cols, rowsHtml, count){
@@ -612,6 +704,13 @@ function showApp(){
   $("#side").style.display="flex";
   $("#main").style.display="flex";
   $("#whoEmail").textContent = currentUser.email;
+
+  const myUserDoc = DB.users.find(u=>u.id===currentUser.uid) || {};
+  const displayName = myUserDoc.name || currentUser.email.split("@")[0];
+  $("#psName").textContent = displayName;
+  $("#psRole").textContent = currentUserRole==="boss" ? "Boss" : "Employee";
+  $("#avatarInitial").textContent = displayName.charAt(0).toUpperCase();
+  $("#profileSnippet").onclick = ()=>{ view="profile"; render(); };
 }
 function showAuth(){
   $("#authwrap").style.display="flex";

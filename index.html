@@ -14,6 +14,7 @@
         <div class="mark">ORIGAMI</div>
         <div class="tag">Operations</div>
       </div>
+
       <div class="abody">
         <div class="field"><label>Work email</label><input type="email" id="loginEmail" autocomplete="username" /></div>
         <div class="field"><label>Password</label><input type="password" id="loginPass" autocomplete="current-password" /></div>
@@ -29,11 +30,18 @@
   <p>Your account has been created. An admin needs to approve your access before you can use the tracker.</p>
   <button id="pendingSignOutBtn">Sign out</button>
      </div>
-  <aside class="side" id="side" style="display:none">
-    <div class="brand">
-      <div class="mark">ORIGAMI</div>
-      <div class="tag">Operations</div>
+<aside class="side" id="side" style="display:none">
+  <div class="brand">
+    <div class="mark">ORIGAMI</div>
+    <div class="tag">Operations</div>
+  </div>
+  <div class="profile-snippet" id="profileSnippet">
+    <div class="avatar-circle" id="avatarInitial"></div>
+    <div class="profile-snippet-text">
+      <div class="ps-name" id="psName"></div>
+      <div class="ps-role" id="psRole"></div>
     </div>
+  </div>
     <nav class="nav" id="nav">
       <button data-view="dashboard" class="on"><span class="ic"></span> Dashboard</button>
       <button data-view="clients"><span class="ic"></span> Clients</button>
@@ -50,18 +58,22 @@
     <div class="foot">Strategy &middot; Growth &middot; Excellence<br>Shared with your team &middot; saved automatically.</div>
   </aside>
 
-  <main class="main" id="main" style="display:none">
-    <div class="top">
-      <div>
-        <div class="eyebrow" id="eyebrow">Command Center</div>
-        <h1 id="title">Dashboard</h1>
-      </div>
-      <div class="spacer"></div>
-      <input class="search" id="search" placeholder="Search..." style="display:none" />
-      <button class="btn" id="addBtn" style="display:none">+ Add</button>
+ <main class="main" id="main" style="display:none">
+  <div class="top">
+    <div>
+      <div class="eyebrow" id="eyebrow">Command Center</div>
+      <h1 id="title">Dashboard</h1>
     </div>
-    <div class="content" id="content"></div>
-  </main>
+    <div class="global-search-wrap">
+      <input class="global-search" id="globalSearch" placeholder="Search..." autocomplete="off" />
+      <div class="global-search-results" id="globalSearchResults"></div>
+    </div>
+    <div class="spacer"></div>
+    <input class="search" id="search" placeholder="Search..." style="display:none" />
+    <button class="btn" id="addBtn" style="display:none">+ Add</button>
+  </div>
+  <div class="content" id="content"></div>
+</main>
 
   <div class="overlay" id="overlay">
     <div class="modal" id="modal"></div>
