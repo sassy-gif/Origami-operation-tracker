@@ -190,38 +190,51 @@ function dueLabel(date){
 function render(){
   if(!currentUser) return;
   $("#nav").querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.view===view));
+
   $("#nav").querySelectorAll("button").forEach(b=>{
     const v = b.dataset.view;
-const employeeAllowed = ["dashboard","projects","tasks","profile","calendar"];
+    const employeeAllowed = ["dashboard","projects","tasks","profile","calendar"];
     const visible = currentUserRole==="boss" || employeeAllowed.includes(v);
     b.style.display = visible ? "" : "none";
   });
- const titles={dashboard:"Dashboard",clients:"Clients",projects:"Projects",team:"Team",tasks:"Tasks",profile:"Profile",calendar:"Calendar"};
-const eyebrows={dashboard:"Command Center",clients:"Accounts",projects:"Engagements",team:"People",tasks:"Workstream",profile:"Your account",calendar:"Schedule"};
+  const titles={dashboard:"Dashboard",clients:"Clients",projects:"Projects",team:"Team",tasks:"Tasks",profile:"Profile",calendar:"Calendar"};
+  const eyebrows={dashboard:"Command Center",clients:"Accounts",projects:"Engagements",team:"People",tasks:"Workstream",profile:"Your account",calendar:"Schedule"};
   $("#title").textContent=titles[view];
   $("#eyebrow").textContent=eyebrows[view];
   const onList = view!=="dashboard";
   $("#search").style.display = onList?"block":"none";
   $("#addBtn").style.display = onList?"block":"none";
   $("#addBtn").textContent = "+ Add " + ({clients:"client",projects:"project",team:"member",tasks:"task"}[view]||"");
- if(view==="dashboard") renderDashboard();
-if(view==="clients") renderClients();
-if(view==="projects") renderProjects();
-if(view==="team") renderTeam();
-if(view==="tasks") renderTasks();
-if(view==="profile") renderProfile();
-if(view==="calendar") renderCalendar();
+  if(view==="dashboard") renderDashboard();
+  if(view==="clients") renderClients();
+  if(view==="projects") renderProjects();
+  if(view==="team") renderTeam();
+  if(view==="tasks") renderTasks();
+  if(view==="profile") renderProfile();
+  if(view==="calendar") renderCalendar();
 }
 
 /* ---------- dashboard ---------- */
 function renderDashboard(){
   const teamPreview = currentUserRole==="boss" ? DB.team.slice(0,4) : [];
+  const projectsPreview = (currentUserRole==="boss" ? DB.projects : DB.projects.filter(p=>p.ownerId===currentUser.uid))
+    .filter(isOpenProject)
+    .slice(0,4);
+  const miniCalToday = new Date();
+  const miniCalYear = miniCalToday.getFullYear();
+  const miniCalMonth = miniCalToday.getMonth();
+  const miniCalDaysInMonth = new Date(miniCalYear, miniCalMonth+1, 0).getDate();
+  const miniCalStartWeekday = new Date(miniCalYear, miniCalMonth, 1).getDay();
+  const miniCalDueDates = new Set([
+    ...DB.projects.filter(p=>isOpenProject(p) && p.due && (currentUserRole==="boss" || p.ownerId===currentUser.uid)).map(p=>p.due),
+    ...DB.tasks.filter(k=>isOpenTask(k) && k.due && (currentUserRole==="boss" || k.assigneeId===currentUser.uid)).map(k=>k.due)
+  ]);
   const activeClients = DB.clients.filter(c=>c.status==="Active").length;
   const openProjects = DB.projects.filter(isOpenProject);
   const visibleProjectsForRing = currentUserRole==="boss" ? DB.projects : DB.projects.filter(p=>p.ownerId===currentUser.uid);
-const visibleTasksForRing = currentUserRole==="boss" ? DB.tasks : DB.tasks.filter(k=>k.assigneeId===currentUser.uid);
-const projDonePct = visibleProjectsForRing.length ? Math.round(visibleProjectsForRing.filter(p=>p.status==="Delivered").length / visibleProjectsForRing.length * 100) : 0;
-const taskDonePct = visibleTasksForRing.length ? Math.round(visibleTasksForRing.filter(k=>k.status==="Done").length / visibleTasksForRing.length * 100) : 0;
+  const visibleTasksForRing = currentUserRole==="boss" ? DB.tasks : DB.tasks.filter(k=>k.assigneeId===currentUser.uid);
+  const projDonePct = visibleProjectsForRing.length ? Math.round(visibleProjectsForRing.filter(p=>p.status==="Delivered").length / visibleProjectsForRing.length * 100) : 0;
+  const taskDonePct = visibleTasksForRing.length ? Math.round(visibleTasksForRing.filter(k=>k.status==="Done").length / visibleTasksForRing.length * 100) : 0;
   const overdue = openProjects.filter(p=>p.due && p.due<today()).length
                 + DB.tasks.filter(k=>isOpenTask(k) && k.due && k.due<today()).length;
   const pipeline = openProjects.reduce((s,p)=>s+(Number(p.fee)||0),0);
@@ -239,11 +252,11 @@ const taskDonePct = visibleTasksForRing.length ? Math.round(visibleTasksForRing.
   const maxw=Math.max(1,...workload.map(w=>w.n));
 
   const due = [
-    ...openProjects.filter(p=>p.due).map(p=>({type:"Project",label:p.title,due:p.due,open:true})),
-    ...DB.tasks.filter(k=>isOpenTask(k)&&k.due).map(k=>({type:"Task",label:k.title,due:k.due,open:true}))
+    ...openProjects.filter(p=>p.due).map(p=>({type:"Project",label:p.title,due:p.due,goto:"projects"})),
+    ...DB.tasks.filter(k=>isOpenTask(k)&&k.due).map(k=>({type:"Task",label:k.title,due:k.due,goto:"tasks"}))
   ].sort((a,b)=>a.due<b.due?-1:1).slice(0,7);
 
- $("#content").innerHTML = `
+  $("#content").innerHTML = `
     <div class="dash-hero">
       <div class="ring-block">
         <svg width="84" height="84" viewBox="0 0 84 84">
@@ -298,21 +311,18 @@ const taskDonePct = visibleTasksForRing.length ? Math.round(visibleTasksForRing.
     <div class="panel" style="margin-top:18px">
       <h3>Due soon &amp; overdue</h3>
       <div class="body">
-        ${due.length? `<ul class="duelist">${due.map(d=>{
+        ${due.length? `<div class="due-rows">${due.map(d=>{
           const cl=dueClass(d.due,true);
-          return `<li>${statusPill(d.type==="Project"?"Review":"Doing").replace(/Review|Doing/,d.type)}<span>${esc(d.label)}</span><span class="when ${cl}">${dueLabel(d.due)}</span></li>`;
-        }).join("")}</ul>` : `<div class="empty"><b>Nothing pending</b>You're all caught up.</div>`}
+          return `
+            <div class="due-row" data-goto="${d.goto}">
+              <span class="due-type ${d.type.toLowerCase()}">${d.type}</span>
+              <span class="due-label">${esc(d.label)}</span>
+              <span class="when ${cl}">${dueLabel(d.due)}</span>
+            </div>`;
+        }).join("")}</div>` : `<div class="empty"><b>Nothing pending</b>You're all caught up.</div>`}
       </div>
     </div>
-<div class="panel" style="margin-top:18px">
-      <h3>Due soon &amp; overdue</h3>
-      <div class="body">
-        ${due.length? `<ul class="duelist">${due.map(d=>{
-          const cl=dueClass(d.due,true);
-          return `<li>${statusPill(d.type==="Project"?"Review":"Doing").replace(/Review|Doing/,d.type)}<span>${esc(d.label)}</span><span class="when ${cl}">${dueLabel(d.due)}</span></li>`;
-        }).join("")}</ul>` : `<div class="empty"><b>Nothing pending</b>You're all caught up.</div>`}
-      </div>
-    </div>
+    <div class="dash-preview-row">
     ${teamPreview.length ? `
     <div class="panel preview-card" style="margin-top:18px" id="teamPreviewCard">
       <h3>Team</h3>
@@ -328,8 +338,53 @@ const taskDonePct = visibleTasksForRing.length ? Math.round(visibleTasksForRing.
         <div class="preview-seemore">See all team &rarr;</div>
       </div>
     </div>` : ""}
+    <div class="panel preview-card" style="margin-top:18px" id="miniCalCard">
+      <h3>This month</h3>
+      <div class="body">
+        <div class="mini-cal-grid">
+          ${["S","M","T","W","T","F","S"].map(d=>`<div class="mc-weekday">${d}</div>`).join("")}
+          ${Array.from({length:miniCalStartWeekday}).map(()=>`<div class="mc-cell empty"></div>`).join("")}
+          ${Array.from({length:miniCalDaysInMonth}).map((_,i)=>{
+            const day = i+1;
+            const dateStr = `${miniCalYear}-${String(miniCalMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+            const isToday = dateStr===today();
+            const hasDue = miniCalDueDates.has(dateStr);
+            return `<div class="mc-cell ${isToday?"today":""} ${hasDue?"has-due":""}">${day}</div>`;
+          }).join("")}
+        </div>
+        <div class="preview-seemore">Open calendar &rarr;</div>
+      </div>
+    </div>
+    <div class="panel preview-card" id="projectsPreviewCard">
+      <h3>Projects</h3>
+      <div class="body">
+        ${projectsPreview.length ? projectsPreview.map(p=>`
+          <div class="preview-row">
+            <div class="preview-row-text">
+              <div class="pr-name">${esc(p.title)}</div>
+              <div class="pr-sub">${statusPill(p.status)} ${p.due?dueLabel(p.due):""}</div>
+            </div>
+          </div>`).join("") : `<div class="pr-sub">Nothing active right now.</div>`}
+        <div class="preview-seemore">See all projects &rarr;</div>
+      </div>
+    </div>
+    </div>
   `;
+
+  if($("#teamPreviewCard")){
+    $("#teamPreviewCard").onclick = ()=>{ view="team"; render(); };
+  }
+  if($("#miniCalCard")){
+    $("#miniCalCard").onclick = ()=>{ view="calendar"; render(); };
+  }
+  if($("#projectsPreviewCard")){
+    $("#projectsPreviewCard").onclick = ()=>{ view="projects"; render(); };
+  }
+  $("#content").querySelectorAll("[data-goto]").forEach(el=>{
+    el.onclick = ()=>{ view = el.dataset.goto; render(); };
+  });
 }
+
 $("#globalSearch").addEventListener("input", e=>{
   const term = e.target.value.trim().toLowerCase();
   const resultsEl = $("#globalSearchResults");
@@ -362,9 +417,6 @@ $("#globalSearch").addEventListener("input", e=>{
         view = el.dataset.goto;
         $("#globalSearch").value="";
         resultsEl.innerHTML=""; resultsEl.style.display="none";
-        if($("#teamPreviewCard")){
-    $("#teamPreviewCard").onclick = ()=>{ view="team"; render(); };
-  }
         render();
       };
     });
@@ -566,10 +618,6 @@ function renderTasks(){
   $("#exportBtn").onclick=()=>exportCSV("tasks",DB.tasks,
     [["title","Task"],["_project","Project"],["_assignee","Assignee"],["status","Status"],["due","Due"]],
     k=>({...k,_project:projTitle(k.projectId),_assignee:teamName(k.assigneeId)}));
-
-  $("#exportBtn").onclick=()=>exportCSV("tasks",DB.tasks,
-    [["title","Task"],["_project","Project"],["_assignee","Assignee"],["status","Status"],["due","Due"]],
-    k=>({...k,_project:projTitle(k.projectId),_assignee:teamName(k.assigneeId)}));
 }
 function wireRows(coll){
   $("#content").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openModal(coll,b.dataset.edit));
@@ -739,11 +787,9 @@ $("#loginBtn").onclick = async ()=>{
 $("#loginPass").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#loginBtn").click(); });
 $("#loginEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#loginBtn").click(); });
 $("#signOutBtn").onclick = async ()=>{
-  console.log("Sign out button clicked");
   try{
     stopSync();
     await signOut(auth);
-    console.log("Sign out succeeded");
   }catch(e){
     console.log("Sign out FAILED:", e);
   }
@@ -795,7 +841,9 @@ onAuthStateChanged(auth, async (user)=>{
     stopSync();
     showAuth();
   }
-}); function renderProfile(){
+});
+
+function renderProfile(){
   const myUserDoc = DB.users.find(u=>u.id===currentUser.uid) || {};
   $("#content").innerHTML = `
     <div class="panel" style="max-width:480px">
@@ -862,6 +910,7 @@ function wireProfileForm(){
     }
   };
 }
+
 let calendarMonth = new Date().getMonth();
 let calendarYear = new Date().getFullYear();
 
