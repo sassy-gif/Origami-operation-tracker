@@ -256,7 +256,8 @@ function renderDashboard(){
     ...DB.tasks.filter(k=>isOpenTask(k)&&k.due).map(k=>({type:"Task",label:k.title,due:k.due,goto:"tasks"}))
   ].sort((a,b)=>a.due<b.due?-1:1).slice(0,7);
 
-  $("#content").innerHTML = `
+
+$("#content").innerHTML = `
     <div class="dash-hero">
       <div class="ring-block">
         <svg width="84" height="84" viewBox="0 0 84 84">
@@ -276,13 +277,15 @@ function renderDashboard(){
         </svg>
         <div class="ring-label"><div class="ring-pct">${taskDonePct}%</div><div class="ring-sub">Tasks done</div></div>
       </div>
+      <div class="hero-kpis">
+        <div class="kpi ${overdue?'alert':''}" data-goto="projects"><div class="label">Overdue</div><div class="val">${overdue}</div><div class="sub">projects + tasks past due</div></div>
+        <div class="kpi" data-goto="projects"><div class="label">Active value</div><div class="val" style="font-size:22px">${money(pipeline)}</div><div class="sub">across open projects</div></div>
+      </div>
     </div>
-    <div class="kpis">
-      <div class="kpi"><div class="label">Active clients</div><div class="val">${activeClients}</div><div class="sub">${DB.clients.length} total accounts</div></div>
-      <div class="kpi"><div class="label">Open projects</div><div class="val">${openProjects.length}</div><div class="sub">${DB.projects.length} all-time</div></div>
-      <div class="kpi ${overdue?'alert':''}"><div class="label">Overdue</div><div class="val">${overdue}</div><div class="sub">projects + tasks past due</div></div>
-      <div class="kpi"><div class="label">Active value</div><div class="val" style="font-size:22px">${money(pipeline)}</div><div class="sub">across open projects</div></div>
-      <div class="kpi"><div class="label">Due this week</div><div class="val">${dueWeek}</div><div class="sub">tasks in next 7 days</div></div>
+    <div class="kpis kpis-secondary">
+      <div class="kpi" data-goto="clients"><div class="label">Active clients</div><div class="val">${activeClients}</div><div class="sub">${DB.clients.length} total accounts</div></div>
+      <div class="kpi" data-goto="projects"><div class="label">Open projects</div><div class="val">${openProjects.length}</div><div class="sub">${DB.projects.length} all-time</div></div>
+      <div class="kpi" data-goto="tasks"><div class="label">Due this week</div><div class="val">${dueWeek}</div><div class="sub">tasks in next 7 days</div></div>
     </div>
     <div class="panels">
       <div class="panel">
@@ -310,14 +313,14 @@ function renderDashboard(){
     </div>
     <div class="panel" style="margin-top:18px">
       <h3>Due soon &amp; overdue</h3>
-      <div class="body">
-        ${due.length? `<div class="due-rows">${due.map(d=>{
+      <div class="body" style="padding-bottom:14px">
+        ${due.length? `<div class="due-strip">${due.map(d=>{
           const cl=dueClass(d.due,true);
           return `
-            <div class="due-row" data-goto="${d.goto}">
-              <span class="due-type ${d.type.toLowerCase()}">${d.type}</span>
-              <span class="due-label">${esc(d.label)}</span>
-              <span class="when ${cl}">${dueLabel(d.due)}</span>
+            <div class="due-chip ${cl}" data-goto="${d.goto}">
+              <span class="due-chip-type">${d.type==="Project"?"P":"T"}</span>
+              <span class="due-chip-label">${esc(d.label)}</span>
+              <span class="due-chip-when">${dueLabel(d.due)}</span>
             </div>`;
         }).join("")}</div>` : `<div class="empty"><b>Nothing pending</b>You're all caught up.</div>`}
       </div>
@@ -429,7 +432,6 @@ document.addEventListener("click", e=>{
     $("#globalSearchResults").style.display="none";
   }
 });
-
 /* ---------- generic list helpers ---------- */
 function tableShell(cols, rowsHtml, count){
   return `
