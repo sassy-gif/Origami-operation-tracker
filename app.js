@@ -577,10 +577,11 @@ function renderTasks(){
         </div>
         <div class="task-card-bottom">
           <div class="doing-tag ${isDoing?'active':''} ${isDone?'disabled':''}" data-toggle-doing="${k.id}">Doing</div>
-          <div class="task-icons">
-            <span class="ticon" data-edit="${k.id}" title="Edit">&#9998;</span>
-            ${currentUserRole==="boss" ? `<span class="ticon del" data-del="${k.id}" title="Delete">&#10005;</span>` : ""}
-          </div>
+        <div class="task-icons">
+  <span class="ticon" data-report="${k.id}" title="Report">&#128172;</span>
+  <span class="ticon" data-edit="${k.id}" title="Edit">&#9998;</span>
+  ${currentUserRole==="boss" ? `<span class="ticon del" data-del="${k.id}" title="Delete">&#10005;</span>` : ""}
+        </div>
         </div>
       </div>
     </div>`;
@@ -596,7 +597,8 @@ function renderTasks(){
   `;
   $("#content").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openModal("tasks",b.dataset.edit));
   $("#content").querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>del("tasks",b.dataset.del));
-
+  $("#content").querySelectorAll("[data-report]").forEach(b=>b.onclick=()=>openReportModal(b.dataset.report));
+  
   $("#content").querySelectorAll("[data-toggle-done]").forEach(el=>{
     el.onclick = async ()=>{
       const id = el.dataset.toggleDone;
@@ -965,5 +967,54 @@ function renderCalendar(){
     calendarMonth++;
     if(calendarMonth>11){ calendarMonth=0; calendarYear++; }
     renderCalendar();
+  };
+}
+function openReportModal(taskId){
+  const task = DB.tasks.find(t=>t.id===taskId);
+  if(!task) return;
+  const reports = task.reports || [];
+
+  const entriesHtml = reports.length ? reports.map(r=>`
+    <div class="report-entry">
+      <div class="report-entry-head">
+        <span class="report-author">${esc(r.author)}</span>
+        <span class="report-time">${new Date(r.timestamp).toLocaleString()}</span>
+      </div>
+      <div class="report-text">${esc(r.text)}</div>
+    </div>
+  `).join("") : `<div class="empty"><b>No updates yet</b>Be the first to add a report on this task.</div>`;
+
+  $("#modal").innerHTML = `
+    <header><div class="eyebrow">Task report</div><h2>${esc(task.title)}</h2></header>
+    <div class="form">
+      <div class="report-log">${entriesHtml}</div>
+      <div class="field" style="margin-top:16px">
+        <label>Add an update</label>
+        <textarea id="reportNewText" placeholder="What's the latest on this task?"></textarea>
+      </div>
+    </div>
+    <footer>
+      <button class="btn ghost" id="cancelBtn">Close</button>
+      <button class="btn" id="reportSaveBtn">Add entry</button>
+    </footer>
+  `;
+  $("#overlay").classList.add("show");
+  $("#cancelBtn").onclick = closeModal;
+  $("#reportSaveBtn").onclick = async ()=>{
+    const text = $("#reportNewText").value.trim();
+    if(!text) return;
+    const myUserDoc = DB.users.find(u=>u.id===currentUser.uid) || {};
+    const newEntry = {
+      author: myUserDoc.name || currentUser.email.split("@")[0],
+      authorRole: currentUserRole,
+      text: text,
+      timestamp: Date.now()
+    };
+    const updatedReports = [...reports, newEntry];
+    const success = await saveRecord("tasks", {...task, reports: updatedReports});
+    if(success){
+      toast("Update added.");
+      openReportModal(taskId);
+    }
   };
 }

@@ -763,3 +763,134 @@
   color:#4ecdf5;
   opacity:1;
 }
+.donut-panel-body{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+}
+.donut-svg{
+  flex:none;
+}
+.donut-total-label{
+  font-size:22px;
+  font-weight:700;
+  fill:#fff;
+  font-family:inherit;
+}
+.donut-legend{
+  flex:none;
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size:11px;
+}
+.donut-legend-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:13px;
+}
+.donut-dot{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  flex:none;
+}
+.donut-legend-label{
+  flex:1;
+}
+.donut-legend-val{
+  font-weight:700;
+  opacity:0.75;
+}
+.donut-total-sub{
+  font-size:11px;
+  opacity:0.55;
+  margin-top:6px;
+  padding-top:8px;
+  border-top:1px solid rgba(255,255,255,0.08);
+}
+.dash-quad-row{
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  gap:14px;
+  margin-top:18px;
+}
+.quad-panel{
+  min-width:0;
+}
+.quad-panel h3{
+  font-size:12px;
+}
+.quad-panel .body{
+  padding:12px 14px 14px;
+}
+.due-list-compact{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.due-row-compact{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  cursor:pointer;
+  font-size:12px;
+  padding:4px 0;
+  transition:.15s;
+}
+.due-row-compact:hover{
+  opacity:0.7;
+}
+.due-dot{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  flex:none;
+  background:rgba(255,255,255,0.3);
+}
+.due-dot.past{
+  background:#e05c5c;
+}
+.due-dot.soon{
+  background:#4ecdf5;
+}
+.due-label-compact{
+  flex:1;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.report-log{
+  max-height:280px;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.report-entry{
+  background:rgba(255,255,255,0.04);
+  border-radius:8px;
+  padding:10px 12px;
+}
+.report-entry-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  margin-bottom:4px;
+}
+.report-author{
+  font-size:12px;
+  font-weight:700;
+}
+.report-time{
+  font-size:10px;
+  opacity:0.5;
+}
+.report-text{
+  font-size:13px;
+  line-height:1.4;
+  white-space:pre-wrap;
+}
