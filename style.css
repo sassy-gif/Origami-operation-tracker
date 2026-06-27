@@ -894,3 +894,224 @@
   line-height:1.4;
   white-space:pre-wrap;
 }
+/* ---------- dashboard 4-panel row (Projects by status / Team workload / Due soon / Calendar) ---------- */
+.dash-quad-row{
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  gap:14px;
+  margin-top:18px;
+}
+.quad-panel{
+  min-width:0;
+}
+.quad-panel h3{
+  font-size:12px;
+}
+.quad-panel .body{
+  padding:12px 14px 14px;
+}
+
+/* donut inside the narrow quad panel: stacked, not side by side */
+.quad-donut-body{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+}
+.quad-donut-legend{
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size:11px;
+}
+.quad-legend-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.quad-legend-label{
+  flex:1;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.quad-legend-val{
+  font-weight:700;
+  opacity:0.75;
+}
+
+/* team workload bars, compacted for the narrow column */
+.quad-workload-body .bar-row{
+  margin:8px 0;
+}
+.quad-bar-row .nm{
+  width:64px;
+  flex:0 0 64px;
+  font-size:12px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* due soon, compact vertical list */
+.quad-due-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.quad-due-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  cursor:pointer;
+  font-size:12px;
+  padding:4px 0;
+  transition:.15s;
+}
+.quad-due-row:hover{
+  opacity:0.7;
+}
+.due-dot-sm{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  flex:none;
+  background:rgba(255,255,255,0.3);
+}
+.due-dot-sm.past{
+  background:#e05c5c;
+}
+.due-dot-sm.soon{
+  background:#4ecdf5;
+}
+.quad-due-label{
+  flex:1;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* mini calendar reused inside the quad panel - tighten further */
+.quad-cal-body .mini-cal-grid{
+  font-size:9px;
+}
+
+/* clickable team workload bar hover glow (reused from earlier) */
+.clickable-bar{
+  cursor:pointer;
+  border-radius:6px;
+  padding:4px 6px;
+  margin:2px -6px;
+  transition:.15s;
+}
+.clickable-bar:hover{
+  background:rgba(255,255,255,0.05);
+}
+.clickable-bar:hover .bar-fill{
+  box-shadow:0 0 8px rgba(78,205,245,0.4);
+}
+
+/* responsive fallback: collapse to 2x2 on narrower screens */
+@media (max-width:1100px){
+  .dash-quad-row{
+    grid-template-columns:repeat(2, 1fr);
+  }
+}
+@media (max-width:640px){
+  .dash-quad-row{
+    grid-template-columns:1fr;
+  }
+}
+.dash-top-row{
+  display:grid;
+  grid-template-columns:1.3fr 1fr 1fr;
+  gap:14px;
+  margin-bottom:14px;
+}
+.progress-overview-card{
+  min-width:0;
+}
+.progress-overview-body{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:28px;
+  padding:18px 14px;
+}
+
+.dash-kpi-row-5{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:14px;
+  margin-bottom:18px;
+}
+
+.kpi-card{
+  background:var(--card, rgba(255,255,255,0.03));
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:var(--radius, 10px);
+  box-shadow:var(--shadow, none);
+  padding:16px;
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  cursor:pointer;
+  transition:.15s;
+}
+.kpi-card:hover{
+  border-color:rgba(255,255,255,0.18);
+  transform:translateY(-1px);
+}
+.kpi-icon{
+  width:48px;
+  height:48px;
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:24px;
+  flex:none;
+}
+.kpi-icon-red{ background:rgba(224,92,92,0.15); }
+.kpi-icon-gold{ background:rgba(217,168,72,0.15); }
+.kpi-icon-green{ background:rgba(76,175,110,0.15); }
+.kpi-icon-blue{ background:rgba(74,144,217,0.15); }
+.kpi-icon-purple{ background:rgba(139,123,199,0.15); }
+
+.kpi-icon-text{
+  flex:1;
+  min-width:0;
+}
+.kpi-icon-label{
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.08em;
+  opacity:0.55;
+  text-transform:uppercase;
+}
+.kpi-icon-val{
+  font-size:22px;
+  font-weight:700;
+  margin-top:4px;
+  line-height:1.1;
+}
+.kpi-icon-sub{
+  font-size:11px;
+  opacity:0.55;
+  margin-top:3px;
+}
+
+@media (max-width:1100px){
+  .dash-top-row{
+    grid-template-columns:1fr;
+  }
+  .dash-kpi-row-5{
+    grid-template-columns:repeat(2, 1fr);
+  }
+}
+@media (max-width:640px){
+  .dash-kpi-row-5{
+    grid-template-columns:1fr;
+  }
+}

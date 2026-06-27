@@ -19,7 +19,6 @@ import {
 
 console.log("Firebase file loaded");
 
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyDPaZC-3BhFuTsfdnTQmgjjQLsYHkw7ZR0",
   authDomain: "origami-tracker.firebaseapp.com",
@@ -30,12 +29,9 @@ const firebaseConfig = {
   measurementId: "G-J7GF6YTBH6"
 };
 
-
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
-
-/* ---------------------------------------------------------------- */
 
 setDoc(doc(db, "test", "hello"), {
   message: "Firebase is alive 🚀",
@@ -48,7 +44,7 @@ let DB = { clients:[], projects:[], team:[], tasks:[], users:[] };
 let view = "dashboard";
 let q = "";
 let currentUser = null;
-let currentUserRole = null; // "boss" | "employee" | "pending" | null
+let currentUserRole = null;
 let unsubscribers = [];
 
 const $ = (s,el=document)=>el.querySelector(s);
@@ -59,15 +55,12 @@ const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&l
 
 const COLLECTIONS = ["clients","projects","team","tasks","users"];
 
-/* ---------- Firestore live sync ---------- */
 function startSync(){
   unsubscribers.forEach(u=>u());
   unsubscribers = [];
-  let loadedCount = 0;
   COLLECTIONS.forEach(coll=>{
     const unsub = onSnapshot(collection(db, coll), snap=>{
       DB[coll] = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-      loadedCount++;
       render();
     }, err=>{
       console.error(coll, err);
@@ -105,7 +98,6 @@ async function deleteRecord(coll, id){
   }
 }
 
-/* ---------- one-time seed (only used if collections are empty) ---------- */
 function plus(days){ const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
 
 async function seedIfEmpty(){
@@ -150,7 +142,6 @@ async function seedIfEmpty(){
   ]);
 }
 
-/* ---------- lookups ---------- */
 const clientName = id => (DB.clients.find(x=>x.id===id)||{}).name || "\u2014";
 const teamName   = id => (DB.team.find(x=>x.id===id)||{}).name || "Unassigned";
 const projTitle  = id => (DB.projects.find(x=>x.id===id)||{}).title || "\u2014";
@@ -186,7 +177,6 @@ function dueLabel(date){
   return "in "+diff+"d";
 }
 
-/* ---------- render shell ---------- */
 function render(){
   if(!currentUser) return;
   $("#nav").querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.view===view));
@@ -214,7 +204,6 @@ function render(){
   if(view==="calendar") renderCalendar();
 }
 
-/* ---------- dashboard ---------- */
 function renderDashboard(){
   const teamPreview = currentUserRole==="boss" ? DB.team.slice(0,4) : [];
   const projectsPreview = (currentUserRole==="boss" ? DB.projects : DB.projects.filter(p=>p.ownerId===currentUser.uid))
@@ -243,6 +232,15 @@ function renderDashboard(){
   const statuses=["Not started","In progress","Review","Delivered"];
   const counts=statuses.map(s=>DB.projects.filter(p=>p.status===s).length);
   const maxc=Math.max(1,...counts);
+  const totalProjForDonut = counts.reduce((a,b)=>a+b,0) || 1;
+  const donutColors = ["#8a8f9c", "#4a90d9", "#d9a548", "#4caf6e"];
+  let donutOffset = 0;
+  const donutSegments = statuses.map((s,i)=>{
+    const pct = counts[i]/totalProjForDonut;
+    const seg = { status:s, count:counts[i], pct:Math.round(pct*100), color:donutColors[i], offset:donutOffset };
+    donutOffset += pct*100;
+    return seg;
+  });
 
   const workload = DB.team.map(m=>{
     const n = DB.projects.filter(p=>p.ownerId===m.id && isOpenProject(p)).length
@@ -256,9 +254,11 @@ function renderDashboard(){
     ...DB.tasks.filter(k=>isOpenTask(k)&&k.due).map(k=>({type:"Task",label:k.title,due:k.due,goto:"tasks"}))
   ].sort((a,b)=>a.due<b.due?-1:1).slice(0,7);
 
-
-$("#content").innerHTML = `
-    <div class="dash-hero">
+  $("#content").innerHTML = `
+   <div class="dash-top-row">
+  <div class="panel progress-overview-card">
+    <h3>Progress Overview</h3>
+    <div class="body progress-overview-body">
       <div class="ring-block">
         <svg width="84" height="84" viewBox="0 0 84 84">
           <circle cx="42" cy="42" r="36" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="8"/>
@@ -277,54 +277,129 @@ $("#content").innerHTML = `
         </svg>
         <div class="ring-label"><div class="ring-pct">${taskDonePct}%</div><div class="ring-sub">Tasks done</div></div>
       </div>
-      <div class="hero-kpis">
-        <div class="kpi ${overdue?'alert':''}" data-goto="projects"><div class="label">Overdue</div><div class="val">${overdue}</div><div class="sub">projects + tasks past due</div></div>
-        <div class="kpi" data-goto="projects"><div class="label">Active value</div><div class="val" style="font-size:22px">${money(pipeline)}</div><div class="sub">across open projects</div></div>
-      </div>
     </div>
-    <div class="kpis kpis-secondary">
-      <div class="kpi" data-goto="clients"><div class="label">Active clients</div><div class="val">${activeClients}</div><div class="sub">${DB.clients.length} total accounts</div></div>
-      <div class="kpi" data-goto="projects"><div class="label">Open projects</div><div class="val">${openProjects.length}</div><div class="sub">${DB.projects.length} all-time</div></div>
-      <div class="kpi" data-goto="tasks"><div class="label">Due this week</div><div class="val">${dueWeek}</div><div class="sub">tasks in next 7 days</div></div>
+  </div>
+
+  <div class="kpi-card kpi-icon-card" data-goto="projects">
+    <div class="kpi-icon kpi-icon-red">&#128197;</div>
+    <div class="kpi-icon-text">
+      <div class="kpi-icon-label">OVERDUE</div>
+      <div class="kpi-icon-val">${overdue}</div>
+      <div class="kpi-icon-sub">projects + tasks past due</div>
     </div>
-    <div class="panels">
-      <div class="panel">
+  </div>
+
+  <div class="kpi-card kpi-icon-card" data-goto="projects">
+    <div class="kpi-icon kpi-icon-gold">&#128176;</div>
+    <div class="kpi-icon-text">
+      <div class="kpi-icon-label">ACTIVE VALUE</div>
+      <div class="kpi-icon-val">${money(pipeline)}</div>
+      <div class="kpi-icon-sub">across open projects</div>
+    </div>
+  </div>
+</div>
+
+<div class="dash-kpi-row-5">
+  <div class="kpi-card kpi-icon-card" data-goto="clients">
+    <div class="kpi-icon kpi-icon-green">&#128101;</div>
+    <div class="kpi-icon-text">
+      <div class="kpi-icon-label">ACTIVE CLIENTS</div>
+      <div class="kpi-icon-val">${activeClients}</div>
+      <div class="kpi-icon-sub">${DB.clients.length} total accounts</div>
+    </div>
+  </div>
+  <div class="kpi-card kpi-icon-card" data-goto="projects">
+    <div class="kpi-icon kpi-icon-blue">&#128193;</div>
+    <div class="kpi-icon-text">
+      <div class="kpi-icon-label">OPEN PROJECTS</div>
+      <div class="kpi-icon-val">${openProjects.length}</div>
+      <div class="kpi-icon-sub">${DB.projects.length} all-time</div>
+    </div>
+  </div>
+  <div class="kpi-card kpi-icon-card" data-goto="tasks">
+    <div class="kpi-icon kpi-icon-purple">&#128198;</div>
+    <div class="kpi-icon-text">
+      <div class="kpi-icon-label">DUE THIS WEEK</div>
+      <div class="kpi-icon-val">${dueWeek}</div>
+      <div class="kpi-icon-sub">tasks in next 7 days</div>
+    </div>
+  </div>
+</div>
+
+    <div class="dash-quad-row">
+      <div class="panel quad-panel">
         <h3>Projects by status</h3>
-        <div class="body">
-          ${statuses.map((s,i)=>`
-            <div class="bar-row">
-              <div class="nm">${s}</div>
-              <div class="bar-track"><div class="bar-fill" style="width:${counts[i]/maxc*100}%;${s==='Delivered'?'background:var(--green)':s==='Review'?'background:var(--gold)':''}"></div></div>
-              <div class="ct">${counts[i]}</div>
-            </div>`).join("")}
+        <div class="body quad-donut-body">
+          <svg width="92" height="92" viewBox="0 0 140 140" class="donut-svg">
+            <circle cx="70" cy="70" r="56" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="18"/>
+            ${donutSegments.map(seg=>{
+              if(seg.pct<=0) return "";
+              const circumference = 2*Math.PI*56;
+              const dash = (seg.pct/100)*circumference;
+              const gap = circumference - dash;
+              const rotation = (seg.offset/100)*360 - 90;
+              return `<circle cx="70" cy="70" r="56" fill="none" stroke="${seg.color}" stroke-width="18"
+                stroke-dasharray="${dash} ${gap}" transform="rotate(${rotation} 70 70)"/>`;
+            }).join("")}
+            <text x="70" y="75" text-anchor="middle" class="donut-total-label">${DB.projects.length}</text>
+          </svg>
+          <div class="quad-donut-legend">
+            ${donutSegments.map(seg=>`
+              <div class="quad-legend-row">
+                <span class="donut-dot" style="background:${seg.color}"></span>
+                <span class="quad-legend-label">${seg.status}</span>
+                <span class="quad-legend-val">${seg.pct}%</span>
+              </div>`).join("")}
+          </div>
         </div>
       </div>
-      <div class="panel">
+
+      <div class="panel quad-panel">
         <h3>Team workload</h3>
-        <div class="body">
+        <div class="body quad-workload-body">
           ${workload.map(w=>`
-            <div class="bar-row">
+            <div class="bar-row clickable-bar quad-bar-row" data-goto="tasks">
               <div class="nm">${esc(w.name)}</div>
               <div class="bar-track"><div class="bar-fill" style="width:${w.n/maxw*100}%"></div></div>
               <div class="ct">${w.n}</div>
             </div>`).join("")}
         </div>
       </div>
-    </div>
-    <div class="panel" style="margin-top:18px">
-      <h3>Due soon &amp; overdue</h3>
-      <div class="body" style="padding-bottom:14px">
-        ${due.length? `<div class="due-strip">${due.map(d=>{
-          const cl=dueClass(d.due,true);
-          return `
-            <div class="due-chip ${cl}" data-goto="${d.goto}">
-              <span class="due-chip-type">${d.type==="Project"?"P":"T"}</span>
-              <span class="due-chip-label">${esc(d.label)}</span>
-              <span class="due-chip-when">${dueLabel(d.due)}</span>
-            </div>`;
-        }).join("")}</div>` : `<div class="empty"><b>Nothing pending</b>You're all caught up.</div>`}
+
+      <div class="panel quad-panel">
+        <h3>Due soon</h3>
+        <div class="body quad-due-body">
+          ${due.length? `<div class="quad-due-list">${due.slice(0,5).map(d=>{
+            const cl=dueClass(d.due,true);
+            return `
+              <div class="quad-due-row" data-goto="${d.goto}">
+                <span class="due-dot-sm ${cl}"></span>
+                <span class="quad-due-label">${esc(d.label)}</span>
+                <span class="when ${cl}">${dueLabel(d.due)}</span>
+              </div>`;
+          }).join("")}</div>` : `<div class="empty"><b>Nothing pending</b>You're all caught up.</div>`}
+        </div>
+      </div>
+
+      <div class="panel quad-panel preview-card" id="miniCalCard">
+        <h3>Calendar</h3>
+        <div class="body quad-cal-body">
+          <div class="mini-cal-grid">
+            ${["S","M","T","W","T","F","S"].map(d=>`<div class="mc-weekday">${d}</div>`).join("")}
+            ${Array.from({length:miniCalStartWeekday}).map(()=>`<div class="mc-cell empty"></div>`).join("")}
+            ${Array.from({length:miniCalDaysInMonth}).map((_,i)=>{
+              const day = i+1;
+              const dateStr = `${miniCalYear}-${String(miniCalMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+              const isToday = dateStr===today();
+              const hasDue = miniCalDueDates.has(dateStr);
+              return `<div class="mc-cell ${isToday?"today":""} ${hasDue?"has-due":""}">${day}</div>`;
+            }).join("")}
+          </div>
+          <div class="preview-seemore">Open calendar &rarr;</div>
+        </div>
       </div>
     </div>
+
     <div class="dash-preview-row">
     ${teamPreview.length ? `
     <div class="panel preview-card" style="margin-top:18px" id="teamPreviewCard">
@@ -341,23 +416,6 @@ $("#content").innerHTML = `
         <div class="preview-seemore">See all team &rarr;</div>
       </div>
     </div>` : ""}
-    <div class="panel preview-card" style="margin-top:18px" id="miniCalCard">
-      <h3>This month</h3>
-      <div class="body">
-        <div class="mini-cal-grid">
-          ${["S","M","T","W","T","F","S"].map(d=>`<div class="mc-weekday">${d}</div>`).join("")}
-          ${Array.from({length:miniCalStartWeekday}).map(()=>`<div class="mc-cell empty"></div>`).join("")}
-          ${Array.from({length:miniCalDaysInMonth}).map((_,i)=>{
-            const day = i+1;
-            const dateStr = `${miniCalYear}-${String(miniCalMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-            const isToday = dateStr===today();
-            const hasDue = miniCalDueDates.has(dateStr);
-            return `<div class="mc-cell ${isToday?"today":""} ${hasDue?"has-due":""}">${day}</div>`;
-          }).join("")}
-        </div>
-        <div class="preview-seemore">Open calendar &rarr;</div>
-      </div>
-    </div>
     <div class="panel preview-card" id="projectsPreviewCard">
       <h3>Projects</h3>
       <div class="body">
@@ -432,7 +490,7 @@ document.addEventListener("click", e=>{
     $("#globalSearchResults").style.display="none";
   }
 });
-/* ---------- generic list helpers ---------- */
+
 function tableShell(cols, rowsHtml, count){
   return `
     <div class="tablewrap">
@@ -461,7 +519,6 @@ function match(obj){
   return JSON.stringify(obj).toLowerCase().includes(q.toLowerCase());
 }
 
-/* ---------- clients ---------- */
 function renderClients(){
   const rows = DB.clients.filter(c=>match({...c,_n:c.name}));
   const html = rows.length? rows.map(c=>`
@@ -479,7 +536,6 @@ function renderClients(){
     [["name","Client"],["industry","Industry"],["contact","Contact"],["status","Status"],["retainer","Retainer"],["notes","Notes"]]);
 }
 
-/* ---------- projects ---------- */
 function renderProjects(){
   const rows = DB.projects.filter(p=>match({...p,_c:clientName(p.clientId),_o:teamName(p.ownerId)}));
   const html = rows.length? rows.map(p=>`
@@ -500,7 +556,6 @@ function renderProjects(){
     p=>({...p,_client:clientName(p.clientId),_owner:teamName(p.ownerId)}));
 }
 
-/* ---------- team ---------- */
 function renderTeam(){
   const rows = DB.team.filter(m=>match(m));
   const html = rows.length? rows.map(m=>{
@@ -555,8 +610,6 @@ function renderTeam(){
   }
 }
 
-/* ---------- tasks ---------- */
-
 function renderTasks(){
   const visibleTasks = currentUserRole==="boss" ? DB.tasks : DB.tasks.filter(k=>k.assigneeId===currentUser.uid);
   const rows = visibleTasks.filter(k=>match({...k,_p:projTitle(k.projectId),_a:teamName(k.assigneeId)}));
@@ -598,7 +651,7 @@ function renderTasks(){
   $("#content").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openModal("tasks",b.dataset.edit));
   $("#content").querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>del("tasks",b.dataset.del));
   $("#content").querySelectorAll("[data-report]").forEach(b=>b.onclick=()=>openReportModal(b.dataset.report));
-  
+
   $("#content").querySelectorAll("[data-toggle-done]").forEach(el=>{
     el.onclick = async ()=>{
       const id = el.dataset.toggleDone;
@@ -628,7 +681,6 @@ function wireRows(coll){
   $("#content").querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>del(coll,b.dataset.del));
 }
 
-/* ---------- CSV ---------- */
 function exportCSV(name, arr, cols, mapper){
   const data = mapper? arr.map(mapper):arr;
   const head = cols.map(c=>c[1]).join(",");
@@ -644,7 +696,6 @@ function exportCSV(name, arr, cols, mapper){
   toast("Exported "+name+".csv");
 }
 
-/* ---------- modal / forms ---------- */
 const FORMS = {
   clients:{title:"client", fields:[
     {k:"name",l:"Client name",t:"text",req:true},
@@ -732,14 +783,12 @@ async function del(coll,id){
   if(success) toast("Deleted.");
 }
 
-/* ---------- toast ---------- */
 let toastT;
 function toast(msg){
   const el=$("#toast"); el.textContent=msg; el.classList.add("show");
   clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove("show"),2200);
 }
 
-/* ---------- events ---------- */
 $("#nav").addEventListener("click",e=>{
   const b=e.target.closest("button"); if(!b) return;
   view=b.dataset.view; q=""; $("#search").value=""; render();
@@ -749,7 +798,6 @@ $("#search").addEventListener("input",e=>{ q=e.target.value; render(); });
 $("#overlay").addEventListener("click",e=>{ if(e.target.id==="overlay") closeModal(); });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
 
-/* ---------- auth ---------- */
 function showApp(){
   $("#authwrap").style.display="none";
   $("#pendingScreen").style.display="none";
