@@ -15,13 +15,15 @@
         <div class="tag">Operations</div>
       </div>
 
-      <div class="abody">
+     <div class="abody">
         <div class="field"><label>Work email</label><input type="email" id="loginEmail" autocomplete="username" /></div>
         <div class="field"><label>Password</label><input type="password" id="loginPass" autocomplete="current-password" /></div>
-        
+
         <div class="autherr" id="loginErr"></div>
         <button class="btn" id="loginBtn" style="width:100%">Sign in</button>
-        <button id="signupBtn">Sign Up</button>
+        <div class="auth-switch">
+          Don't have an account? <span id="signupBtn" class="auth-link">Sign up</span>
+        </div>
       </div>
     </div>
   </div>
@@ -69,7 +71,6 @@
       <div class="global-search-results" id="globalSearchResults"></div>
     </div>
     <div class="spacer"></div>
-    <input class="search" id="search" placeholder="Search..." style="display:none" />
     <button class="btn" id="addBtn" style="display:none">+ Add</button>
   </div>
   <div class="content" id="content"></div>

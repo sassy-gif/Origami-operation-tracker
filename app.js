@@ -203,7 +203,6 @@ function render(){
   $("#title").textContent=titles[view];
   $("#eyebrow").textContent=eyebrows[view];
   const onList = view!=="dashboard";
-  $("#search").style.display = onList?"block":"none";
   $("#addBtn").style.display = onList?"block":"none";
   $("#addBtn").textContent = "+ Add " + ({clients:"client",projects:"project",team:"member",tasks:"task"}[view]||"");
   if(view==="dashboard") renderDashboard();
@@ -902,10 +901,9 @@ function toast(msg){
 
 $("#nav").addEventListener("click",e=>{
   const b=e.target.closest("button"); if(!b) return;
-  view=b.dataset.view; q=""; $("#search").value=""; render();
+  view=b.dataset.view; q=""; render();
 });
 $("#addBtn").onclick=()=>openModal(view,null);
-$("#search").addEventListener("input",e=>{ q=e.target.value; render(); });
 $("#overlay").addEventListener("click",e=>{ if(e.target.id==="overlay") closeModal(); });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
 
@@ -979,6 +977,7 @@ $("#signupBtn").onclick = async () => {
 };
 onAuthStateChanged(auth, async (user)=>{
   if(user){
+    console.log("AUTH STATE FIRED. user:", user ? user.email : "null");
     currentUser = user;
 
     const userDocSnap = await getDoc(doc(db, "users", user.uid));
