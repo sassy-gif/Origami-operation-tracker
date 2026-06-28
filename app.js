@@ -177,6 +177,17 @@ function dueLabel(date){
   return "in "+diff+"d";
 }
 
+function timeAgo(timestamp){
+  const diff = Date.now() - timestamp;
+  const mins = Math.floor(diff/60000);
+  if(mins < 1) return "just now";
+  if(mins < 60) return mins+"m ago";
+  const hrs = Math.floor(mins/60);
+  if(hrs < 24) return hrs+"h ago";
+  const days = Math.floor(hrs/24);
+  return days+"d ago";
+}
+
 function render(){
   if(!currentUser) return;
   $("#nav").querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.view===view));
@@ -521,17 +532,53 @@ function match(obj){
 
 function renderClients(){
   const rows = DB.clients.filter(c=>match({...c,_n:c.name}));
-  const html = rows.length? rows.map(c=>`
-    <tr>
-      <td><div class="name">${esc(c.name)}</div><div class="meta">${esc(c.industry||"\u2014")}</div></td>
-      <td>${esc(c.contact||"\u2014")}</td>
-      <td>${statusPill(c.status)}</td>
-      <td>${Number(c.retainer)?money(c.retainer):"\u2014"}</td>
-      <td>${DB.projects.filter(p=>p.clientId===c.id&&isOpenProject(p)).length}</td>
-      <td>${acts(c.id)}</td>
-    </tr>`).join("") : emptyRow(6,"Add your first client to get started.");
-  $("#content").innerHTML = tableShell(["Client","Contact","Status","Retainer","Open projects",""], html, rows.length);
-  wireRows("clients");
+
+  const cardsHtml = rows.length ? rows.map(c=>{
+    const clientProjects = DB.projects.filter(p=>p.clientId===c.id);
+    const openCount = clientProjects.filter(isOpenProject).length;
+    const totalValue = clientProjects.filter(isOpenProject).reduce((s,p)=>s+(Number(p.fee)||0),0) + (Number(c.retainer)||0);
+    return `
+    <div class="client-card" data-client-jump="${esc(c.name)}">
+      <div class="client-card-top">
+        <div>
+          <div class="client-name">${esc(c.name)}</div>
+          <div class="client-industry">${esc(c.industry||"\u2014")}</div>
+        </div>
+        ${statusPill(c.status)}
+      </div>
+      <div class="client-card-mid">
+        <div class="client-stat"><div class="client-stat-val">${openCount}</div><div class="client-stat-lbl">Open projects</div></div>
+        <div class="client-stat"><div class="client-stat-val">${money(totalValue)}</div><div class="client-stat-lbl">Total value</div></div>
+      </div>
+      <div class="client-card-bottom">
+        <span class="client-contact">${c.contact ? "Contact: "+esc(c.contact) : "No contact listed"}</span>
+        <div class="client-icons">
+          <span class="ticon" data-edit="${c.id}" title="Edit">&#9998;</span>
+          ${currentUserRole==="boss" ? `<span class="ticon del" data-del="${c.id}" title="Delete">&#10005;</span>` : ""}
+        </div>
+      </div>
+    </div>`;
+  }).join("") : `<div class="empty"><b>Nothing here yet</b>Add your first client to get started.</div>`;
+
+  $("#content").innerHTML = `
+    <div class="tabletools">
+      <span class="count">${rows.length} ${rows.length===1?"client":"clients"}</span>
+      <span class="spacer"></span>
+      <button class="linkbtn" id="exportBtn">Export CSV</button>
+    </div>
+    <div class="client-cards">${cardsHtml}</div>
+  `;
+
+  $("#content").querySelectorAll("[data-edit]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openModal("clients",b.dataset.edit); });
+  $("#content").querySelectorAll("[data-del]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); del("clients",b.dataset.del); });
+  $("#content").querySelectorAll("[data-client-jump]").forEach(card=>{
+    card.onclick = ()=>{
+      q = card.dataset.clientJump;
+      view = "projects";
+      render();
+    };
+  });
+
   $("#exportBtn").onclick=()=>exportCSV("clients",DB.clients,
     [["name","Client"],["industry","Industry"],["contact","Contact"],["status","Status"],["retainer","Retainer"],["notes","Notes"]]);
 }
@@ -549,7 +596,33 @@ function renderProjects(){
       <td>${Number(p.fee)?money(p.fee):"\u2014"}</td>
       <td>${acts(p.id)}</td>
     </tr>`).join("") : emptyRow(8,"Add a project to start tracking delivery.");
-  $("#content").innerHTML = tableShell(["Project","Owner","Status","Priority","Due","Progress","Fee",""], html, rows.length);
+
+  const activity = DB.projects
+    .filter(p=>p.lastActivity)
+    .sort((a,b)=>b.lastActivity.timestamp - a.lastActivity.timestamp)
+    .slice(0,6);
+
+  const activityHtml = activity.length ? activity.map(p=>`
+    <div class="activity-row">
+      <span class="activity-dot"></span>
+      <div class="activity-text">
+        <div class="activity-detail">${esc(p.lastActivity.detail)} <b>${esc(p.title)}</b></div>
+        <div class="activity-time">${timeAgo(p.lastActivity.timestamp)}</div>
+      </div>
+    </div>
+  `).join("") : `<div class="empty"><b>No recent activity</b>Updates will appear here as projects change.</div>`;
+
+  $("#content").innerHTML = `
+    <div class="projects-layout">
+      <div class="projects-main">
+        ${tableShell(["Project","Owner","Status","Priority","Due","Progress","Fee",""], html, rows.length)}
+      </div>
+      <div class="panel activity-panel">
+        <h3>Recent Activity</h3>
+        <div class="body">${activityHtml}</div>
+      </div>
+    </div>
+  `;
   wireRows("projects");
   $("#exportBtn").onclick=()=>exportCSV("projects",DB.projects,
     [["title","Project"],["_client","Client"],["_owner","Owner"],["status","Status"],["priority","Priority"],["due","Due"],["progress","Progress %"],["fee","Fee"]],
@@ -558,44 +631,71 @@ function renderProjects(){
 
 function renderTeam(){
   const rows = DB.team.filter(m=>match(m));
-  const html = rows.length? rows.map(m=>{
+  const cardsHtml = rows.length ? rows.map(m=>{
     const op=DB.projects.filter(p=>p.ownerId===m.id&&isOpenProject(p)).length;
     const ot=DB.tasks.filter(k=>k.assigneeId===m.id&&isOpenTask(k)).length;
-    return `<tr>
-      <td><div class="name">${esc(m.name)}</div></td>
-      <td>${esc(m.role||"\u2014")}</td>
-      <td>${op}</td>
-      <td>${ot}</td>
-      <td>${acts(m.id)}</td>
-    </tr>`;}).join("") : emptyRow(5,"Add your team members.");
+    return `
+    <div class="team-card" data-member-jump="${esc(m.name)}">
+      <div class="avatar-circle team-avatar">${esc((m.name||"?").charAt(0).toUpperCase())}</div>
+      <div class="team-card-info">
+        <div class="team-card-name">${esc(m.name)}</div>
+        <div class="team-card-role">${esc(m.role||"\u2014")}</div>
+      </div>
+      <div class="team-card-stats">
+        <div class="team-stat"><div class="team-stat-val">${op}</div><div class="team-stat-lbl">Projects</div></div>
+        <div class="team-stat"><div class="team-stat-val">${ot}</div><div class="team-stat-lbl">Tasks</div></div>
+      </div>
+      <div class="team-card-icons">
+        <span class="ticon" data-edit="${m.id}" title="Edit">&#9998;</span>
+        ${currentUserRole==="boss" ? `<span class="ticon del" data-del="${m.id}" title="Delete">&#10005;</span>` : ""}
+      </div>
+    </div>`;
+  }).join("") : `<div class="empty"><b>Nothing here yet</b>Add your team members.</div>`;
 
   let usersHtml = "";
   if(currentUserRole === "boss"){
-    const userRows = DB.users.map(u=>`
-      <tr>
-        <td>${esc(u.email)}</td>
-        <td>
-          <select data-role-uid="${u.id}">
-            <option value="pending" ${u.role==="pending"?"selected":""}>Pending</option>
-            <option value="employee" ${u.role==="employee"?"selected":""}>Employee</option>
-            <option value="boss" ${u.role==="boss"?"selected":""}>Boss</option>
-          </select>
-        </td>
-      </tr>`).join("");
+    const userRows = DB.users.map(u=>{
+      const initial = (u.name || u.email || "?").charAt(0).toUpperCase();
+      return `
+      <div class="access-row">
+        <div class="avatar-circle access-avatar">${esc(initial)}</div>
+        <div class="access-info">
+          <div class="access-name">${esc(u.name || u.email.split("@")[0])}</div>
+          <div class="access-email">${esc(u.email)}</div>
+        </div>
+        <select class="access-select" data-role-uid="${u.id}">
+          <option value="pending" ${u.role==="pending"?"selected":""}>Pending</option>
+          <option value="employee" ${u.role==="employee"?"selected":""}>Employee</option>
+          <option value="boss" ${u.role==="boss"?"selected":""}>Boss</option>
+        </select>
+      </div>`;
+    }).join("");
     usersHtml = `
       <div class="panel" style="margin-top:18px">
         <h3>User access</h3>
-        <div class="body">
-          <table>
-            <thead><tr><th>Email</th><th>Role</th></tr></thead>
-            <tbody>${userRows}</tbody>
-          </table>
-        </div>
+        <div class="body access-list">${userRows}</div>
       </div>`;
   }
 
-  $("#content").innerHTML = tableShell(["Name","Role","Open projects","Open tasks",""], html, rows.length) + usersHtml;
-  wireRows("team");
+  $("#content").innerHTML = `
+    <div class="tabletools">
+      <span class="count">${rows.length} ${rows.length===1?"member":"members"}</span>
+      <span class="spacer"></span>
+      <button class="linkbtn" id="exportBtn">Export CSV</button>
+    </div>
+    <div class="team-cards">${cardsHtml}</div>
+  ` + usersHtml;
+
+  $("#content").querySelectorAll("[data-edit]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openModal("team",b.dataset.edit); });
+  $("#content").querySelectorAll("[data-del]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); del("team",b.dataset.del); });
+  $("#content").querySelectorAll("[data-member-jump]").forEach(card=>{
+    card.onclick = ()=>{
+      q = card.dataset.memberJump;
+      view = "tasks";
+      render();
+    };
+  });
+
   $("#exportBtn").onclick=()=>exportCSV("team",DB.team,[["name","Name"],["role","Role"]]);
 
   if(currentUserRole === "boss"){
@@ -758,20 +858,31 @@ function openModal(coll, id){
     </footer>`;
   $("#overlay").classList.add("show");
   $("#cancelBtn").onclick=closeModal;
-  $("#saveBtn").onclick=async ()=>{
-    const data = id? {...rec}:{id:uid()};
-    let ok=true;
-    cfg.fields.forEach(f=>{
-      const el=$(`[name="${f.k}"]`,$("#modal"));
-      let v=el.value;
-      if(f.t==="number") v=v===""?0:Number(v);
-      if(f.req && !String(v).trim()){ ok=false; el.style.borderColor="var(--red)"; }
-      data[f.k]=v;
-    });
-    if(!ok){ toast("Please fill in the required field."); return; }
-    const success = await saveRecord(coll, data);
-    if(success){ closeModal(); toast(id?"Saved.":"Added."); }
-  };
+ $("#saveBtn").onclick=async ()=>{
+  const data = id? {...rec}:{id:uid()};
+  let ok=true;
+  cfg.fields.forEach(f=>{
+    const el=$(`[name="${f.k}"]`,$("#modal"));
+    let v=el.value;
+    if(f.t==="number") v=v===""?0:Number(v);
+    if(f.req && !String(v).trim()){ ok=false; el.style.borderColor="var(--red)"; }
+    data[f.k]=v;
+  });
+  if(!ok){ toast("Please fill in the required field."); return; }
+
+  if(coll==="projects"){
+    const isNew = !id;
+    const statusChanged = !isNew && rec.status !== data.status;
+    if(isNew){
+      data.lastActivity = { type:"created", timestamp:Date.now(), detail:"Project created" };
+    } else if(statusChanged){
+      data.lastActivity = { type:"status_change", timestamp:Date.now(), detail:`Status changed to "${data.status}"` };
+    }
+  }
+
+  const success = await saveRecord(coll, data);
+  if(success){ closeModal(); toast(id?"Saved.":"Added."); }
+};
 }
 function closeModal(){ $("#overlay").classList.remove("show"); $("#modal").innerHTML=""; }
 
