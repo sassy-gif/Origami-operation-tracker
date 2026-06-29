@@ -584,49 +584,93 @@ function renderClients(){
 
 function renderProjects(){
   const rows = DB.projects.filter(p=>match({...p,_c:clientName(p.clientId),_o:teamName(p.ownerId)}));
-  const html = rows.length? rows.map(p=>`
-    <tr>
-      <td><div class="name">${esc(p.title)}</div><div class="meta">${esc(clientName(p.clientId))}</div></td>
-      <td>${esc(teamName(p.ownerId))}</td>
-      <td>${statusPill(p.status)}</td>
-      <td>${prioPill(p.priority)}</td>
-      <td><span class="when ${dueClass(p.due,isOpenProject(p))}" style="font-weight:700">${p.due?dueLabel(p.due):"\u2014"}</span></td>
-      <td><div class="prog"><div class="t"><div class="f" style="width:${Number(p.progress)||0}%"></div></div><div class="p">${Number(p.progress)||0}%</div></div></td>
-      <td>${Number(p.fee)?money(p.fee):"\u2014"}</td>
-      <td>${acts(p.id)}</td>
-    </tr>`).join("") : emptyRow(8,"Add a project to start tracking delivery.");
+  const visibleProjects = currentUserRole==="boss" ? rows : rows.filter(p=>p.ownerId===currentUser.uid);
+  const projectsWithTasks = visibleProjects.map(p=>{
+    const projTasks = DB.tasks.filter(t=>t.projectId===p.id);
+    const doneCount = projTasks.filter(t=>t.status==="Done").length;
+    return { ...p, _tasks: projTasks, _doneCount: doneCount, _totalCount: projTasks.length };
+  });
 
-  const activity = DB.projects
-    .filter(p=>p.lastActivity)
-    .sort((a,b)=>b.lastActivity.timestamp - a.lastActivity.timestamp)
-    .slice(0,6);
-
-  const activityHtml = activity.length ? activity.map(p=>`
-    <div class="activity-row">
-      <span class="activity-dot"></span>
-      <div class="activity-text">
-        <div class="activity-detail">${esc(p.lastActivity.detail)} <b>${esc(p.title)}</b></div>
-        <div class="activity-time">${timeAgo(p.lastActivity.timestamp)}</div>
+  const cardsHtml = projectsWithTasks.length ? projectsWithTasks.map(p=>{
+    const pct = p._totalCount ? Math.round(p._doneCount/p._totalCount*100) : 0;
+    const isDone = p._totalCount>0 && p._doneCount===p._totalCount;
+    return `
+    <div class="ptrack-project ${isDone?'done':''}">
+      <div class="ptrack-head" data-proj-toggle="${p.id}">
+        <div class="ptrack-emoji">${isDone?"&#127881;":"&#128193;"}</div>
+        <div class="ptrack-title-wrap">
+          <div class="ptrack-name">${esc(p.title)}</div>
+          <div class="ptrack-meta">${esc(clientName(p.clientId))}</div>
+        </div>
+        <div class="ptrack-bar-wrap">
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <div class="ptrack-count">${p._doneCount} / ${p._totalCount}</div>
+        </div>
+        <span class="ticon ptrack-del-icon" data-del-proj="${p.id}" title="Delete project">&#10005;</span>
+        <span class="ptrack-chev">&#9656;</span>
       </div>
-    </div>
-  `).join("") : `<div class="empty"><b>No recent activity</b>Updates will appear here as projects change.</div>`;
+      <div class="ptrack-tasks">
+        ${p._tasks.map(t=>`
+          <div class="ptrack-task ${t.status==="Done"?'checked':''}">
+            <div class="task-check ${t.status==="Done"?'checked':''}" data-ptrack-toggle="${t.id}">${t.status==="Done"?"&#10003;":""}</div>
+            <div class="ptrack-task-body">
+              <div class="ptrack-task-text">${esc(t.title)}</div>
+              <textarea class="ptrack-note" data-note-id="${t.id}" placeholder="Add a note...">${esc(t.note||"")}</textarea>
+            </div>
+            <span class="ticon del" data-del-task="${t.id}" title="Remove task">&#10005;</span>
+          </div>
+        `).join("")}
+
+      </div>
+    </div>`;
+  }).join("") : `<div class="empty"><b>Nothing here yet</b>Add a project to start tracking delivery.</div>`;
 
   $("#content").innerHTML = `
-    <div class="projects-layout">
-      <div class="projects-main">
-        ${tableShell(["Project","Owner","Status","Priority","Due","Progress","Fee",""], html, rows.length)}
-      </div>
-      <div class="panel activity-panel">
-        <h3>Recent Activity</h3>
-        <div class="body">${activityHtml}</div>
-      </div>
+    <div class="tabletools">
+      <span class="count">${visibleProjects.length} ${visibleProjects.length===1?"project":"projects"}</span>
     </div>
+    <div class="ptrack-list">${cardsHtml}</div>
   `;
-  wireRows("projects");
-  $("#exportBtn").onclick=()=>exportCSV("projects",DB.projects,
-    [["title","Project"],["_client","Client"],["_owner","Owner"],["status","Status"],["priority","Priority"],["due","Due"],["progress","Progress %"],["fee","Fee"]],
-    p=>({...p,_client:clientName(p.clientId),_owner:teamName(p.ownerId)}));
+
+  $("#content").querySelectorAll("[data-proj-toggle]").forEach(head=>{
+    head.onclick = (e)=>{
+      if(e.target.closest("[data-del-proj]")) return;
+      head.closest(".ptrack-project").classList.toggle("open");
+    };
+  });
+
+  $("#content").querySelectorAll("[data-del-proj]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); del("projects",b.dataset.delProj); });
+
+  $("#content").querySelectorAll("[data-ptrack-toggle]").forEach(el=>{
+    el.onclick = async (e)=>{
+      e.stopPropagation();
+      const id = el.dataset.ptrackToggle;
+      const task = DB.tasks.find(t=>t.id===id);
+      if(!task) return;
+      const newStatus = task.status==="Done" ? "To do" : "Done";
+      await saveRecord("tasks", {...task, status:newStatus});
+    };
+  });
+
+  $("#content").querySelectorAll("[data-del-task]").forEach(el=>{
+    el.onclick = async (e)=>{
+      e.stopPropagation();
+      if(!confirm("Remove this task?")) return;
+      await del("tasks", el.dataset.delTask);
+    };
+  });
+
+  $("#content").querySelectorAll("[data-note-id]").forEach(el=>{
+    el.addEventListener("click", e=>e.stopPropagation());
+    el.addEventListener("input", async ()=>{
+      const id = el.dataset.noteId;
+      const task = DB.tasks.find(t=>t.id===id);
+      if(!task) return;
+      await saveRecord("tasks", {...task, note: el.value});
+    });
+  });
 }
+
 function renderTeam(){
 const allMembers = DB.users.filter(u=>u.role==="employee" || u.role==="boss").filter(u=>match(u)).map(u=>({
   id: u.id, name: u.name || u.email.split("@")[0], role: u.role==="boss"?"Boss":"Employee", source: "users"
