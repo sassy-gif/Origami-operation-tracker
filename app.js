@@ -252,12 +252,12 @@ function renderDashboard(){
     return seg;
   });
 
-  const workload = DB.team.map(m=>{
-    const n = DB.projects.filter(p=>p.ownerId===m.id && isOpenProject(p)).length
-            + DB.tasks.filter(k=>k.assigneeId===m.id && isOpenTask(k)).length;
-    return {name:m.name, n};
-  });
-  const maxw=Math.max(1,...workload.map(w=>w.n));
+const workload = DB.users.filter(u=>u.role==="employee" || u.role==="boss").map(u=>{
+  const n = DB.projects.filter(p=>p.ownerId===u.id && isOpenProject(p)).length
+          + DB.tasks.filter(k=>k.assigneeId===u.id && isOpenTask(k)).length;
+  return {name: u.name || u.email.split("@")[0], n};
+});
+const maxw=Math.max(1,...workload.map(w=>w.n));
 
   const due = [
     ...openProjects.filter(p=>p.due).map(p=>({type:"Project",label:p.title,due:p.due,goto:"projects"})),
@@ -627,10 +627,12 @@ function renderProjects(){
     [["title","Project"],["_client","Client"],["_owner","Owner"],["status","Status"],["priority","Priority"],["due","Due"],["progress","Progress %"],["fee","Fee"]],
     p=>({...p,_client:clientName(p.clientId),_owner:teamName(p.ownerId)}));
 }
-
 function renderTeam(){
-  const rows = DB.team.filter(m=>match(m));
-  const cardsHtml = rows.length ? rows.map(m=>{
+const allMembers = DB.users.filter(u=>u.role==="employee" || u.role==="boss").filter(u=>match(u)).map(u=>({
+  id: u.id, name: u.name || u.email.split("@")[0], role: u.role==="boss"?"Boss":"Employee", source: "users"
+}));
+
+  const cardsHtml = allMembers.length ? allMembers.map(m=>{
     const op=DB.projects.filter(p=>p.ownerId===m.id&&isOpenProject(p)).length;
     const ot=DB.tasks.filter(k=>k.assigneeId===m.id&&isOpenTask(k)).length;
     return `
@@ -644,10 +646,11 @@ function renderTeam(){
         <div class="team-stat"><div class="team-stat-val">${op}</div><div class="team-stat-lbl">Projects</div></div>
         <div class="team-stat"><div class="team-stat-val">${ot}</div><div class="team-stat-lbl">Tasks</div></div>
       </div>
+      ${m.source==="team" ? `
       <div class="team-card-icons">
         <span class="ticon" data-edit="${m.id}" title="Edit">&#9998;</span>
         ${currentUserRole==="boss" ? `<span class="ticon del" data-del="${m.id}" title="Delete">&#10005;</span>` : ""}
-      </div>
+      </div>` : ""}
     </div>`;
   }).join("") : `<div class="empty"><b>Nothing here yet</b>Add your team members.</div>`;
 
@@ -678,7 +681,7 @@ function renderTeam(){
 
   $("#content").innerHTML = `
     <div class="tabletools">
-      <span class="count">${rows.length} ${rows.length===1?"member":"members"}</span>
+      <span class="count">${allMembers.length} ${allMembers.length===1?"member":"members"}</span>
       <span class="spacer"></span>
       <button class="linkbtn" id="exportBtn">Export CSV</button>
     </div>
@@ -708,7 +711,6 @@ function renderTeam(){
     });
   }
 }
-
 function renderTasks(){
   const visibleTasks = currentUserRole==="boss" ? DB.tasks : DB.tasks.filter(k=>k.assigneeId===currentUser.uid);
   const rows = visibleTasks.filter(k=>match({...k,_p:projTitle(k.projectId),_a:teamName(k.assigneeId)}));
@@ -807,7 +809,7 @@ const FORMS = {
   projects:{title:"project", fields:[
     {k:"title",l:"Project title",t:"text",req:true,full:true},
     {k:"clientId",l:"Client",t:"ref",ref:"clients"},
-    {k:"ownerId",l:"Owner",t:"ref",ref:"team"},
+   {k:"ownerId",l:"Owner",t:"ref",ref:"users"},
     {k:"status",l:"Status",t:"select",opts:["Not started","In progress","Review","Delivered"]},
     {k:"priority",l:"Priority",t:"select",opts:["High","Medium","Low"]},
     {k:"due",l:"Due date",t:"date"},
@@ -821,12 +823,16 @@ const FORMS = {
   tasks:{title:"task", fields:[
     {k:"title",l:"Task",t:"text",req:true,full:true},
     {k:"projectId",l:"Project",t:"ref",ref:"projects"},
-    {k:"assigneeId",l:"Assignee",t:"ref",ref:"team"},
+  {k:"assigneeId",l:"Assignee",t:"ref",ref:"users"},
     {k:"status",l:"Status",t:"select",opts:["To do","Doing","Done"]},
     {k:"due",l:"Due date",t:"date"},
   ]},
 };
-function refLabel(coll,o){ return coll==="projects"?o.title:o.name; }
+function refLabel(coll,o){
+  if(coll==="projects") return o.title;
+  if(coll==="users") return o.name || o.email;
+  return o.name;
+}
 
 function openModal(coll, id){
   const cfg=FORMS[coll];
@@ -835,18 +841,21 @@ function openModal(coll, id){
   const fieldsHtml = cfg.fields.map(f=>{
     const val = rec[f.k]!=null?rec[f.k]:"";
     let input="";
-    if(f.t==="select"){
-      input=`<select name="${f.k}">${f.opts.map(o=>`<option ${o===val?"selected":""}>${o}</option>`).join("")}</select>`;
-    }else if(f.t==="ref"){
-      const list=DB[f.ref];
-      input=`<select name="${f.k}"><option value="">\u2014</option>${list.map(o=>`<option value="${o.id}" ${o.id===val?"selected":""}>${esc(refLabel(f.ref,o))}</option>`).join("")}</select>`;
-    }else if(f.t==="textarea"){
-      input=`<textarea name="${f.k}">${esc(val)}</textarea>`;
-    }else{
-      input=`<input type="${f.t}" name="${f.k}" value="${esc(val)}" ${f.req?"required":""} ${f.t==="number"?'min="0"':""}/>`;
-    }
-    return `<div class="field" style="${f.full?'grid-column:1/-1':''}"><label>${f.l}</label>${input}</div>`;
-  }).join("");
+  if(f.t==="select"){
+    input=`<select name="${f.k}">${f.opts.map(o=>`<option ${o===val?"selected":""}>${o}</option>`).join("")}</select>`;
+}else if(f.t==="ref"){
+  let list=DB[f.ref];
+  if(f.ref==="users"){
+    list = list.filter(u=>u.role==="employee" || u.role==="boss");
+  }
+  input=`<select name="${f.k}"><option value="">\u2014</option>${list.map(o=>`<option value="${o.id}" ${o.id===val?"selected":""}>${esc(refLabel(f.ref,o))}</option>`).join("")}</select>`;
+}else if(f.t==="textarea"){
+  input=`<textarea name="${f.k}">${esc(val)}</textarea>`;
+}else{
+  input=`<input type="${f.t}" name="${f.k}" value="${esc(val)}" ${f.req?"required":""} ${f.t==="number"?'min="0"':""}/>`;
+}
+return `<div class="field" style="${f.full?'grid-column:1/-1':''}"><label>${f.l}</label>${input}</div>`;
+}).join("");
 
   $("#modal").innerHTML=`
     <header><div class="eyebrow">${editing?"Edit":"New"} ${cfg.title}</div><h2>${editing?esc(rec[cfg.fields[0].k]||""):"Add "+cfg.title}</h2></header>
