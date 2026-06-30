@@ -1412,8 +1412,8 @@
   gap:6px;
 }
 .ptrack-project{
-  background:#DADEE1;
-  border:1px solid #c2c8cc;
+  background:#F5F1E6;
+  border:1px solid #ddd6c2;
   border-radius:14px;
   overflow:hidden;
 }
@@ -1426,13 +1426,13 @@
   user-select:none;
 }
 .ptrack-head:hover{
-  background:#cdd3d8;
+  background:#ede6d4;
 }
 .ptrack-emoji{
   width:34px;
   height:34px;
   border-radius:10px;
-  background:#629BB5;
+  background:#11226D;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -1440,7 +1440,7 @@
   flex:none;
 }
 .ptrack-project.done .ptrack-emoji{
-  background:#4a8a6e;
+  background:#4a7e5a;
 }
 .ptrack-title-wrap{
   flex:1;
@@ -1449,11 +1449,11 @@
 .ptrack-name{
   font-weight:700;
   font-size:14px;
-  color:#1f2937;
+  color:#1a1a2e;
 }
 .ptrack-meta{
   font-size:11px;
-  color:#5b6472;
+  color:#6b6555;
   margin-top:0px;
 }
 .ptrack-bar-wrap{
@@ -1461,20 +1461,20 @@
   flex:none;
 }
 .ptrack-bar-wrap .bar-track{
-  background:#c2c8cc;
+  background:#ddd6c2;
 }
 .ptrack-bar-wrap .bar-fill{
-  background:#629BB5;
+  background:#C0C58F;
 }
 .ptrack-count{
   font-size:10px;
-  color:#5b6472;
+  color:#6b6555;
   margin-top:2px;
   text-align:right;
 }
 .ptrack-del-icon{
   font-size:12px;
-  color:#5b6472;
+  color:#6b6555;
   opacity:0;
   cursor:pointer;
   flex:none;
@@ -1489,7 +1489,7 @@
 }
 .ptrack-chev{
   font-size:12px;
-  color:#5b6472;
+  color:#6b6555;
   transition:transform .25s;
   flex:none;
   width:16px;
@@ -1501,8 +1501,8 @@
 
 .ptrack-tasks{
   display:none;
-  background:#B9D8E1;
-  border-top:1px solid #a3c5d0;
+  background:#ECE7D6;
+  border-top:1px solid #ddd6c2;
 }
 .ptrack-project.open .ptrack-tasks{
   display:block;
@@ -1512,7 +1512,7 @@
   align-items:flex-start;
   gap:10px;
   padding:8px 14px;
-  border-bottom:1px solid #a3c5d0;
+  border-bottom:1px solid #ddd6c2;
 }
 .ptrack-task:last-child{
   border-bottom:none;
@@ -1523,10 +1523,10 @@
 }
 .ptrack-task-text{
   font-size:13px;
-  color:#1f2937;
+  color:#1a1a2e;
 }
 .ptrack-task.checked .ptrack-task-text{
-  color:#5b6472;
+  color:#6b6555;
   text-decoration:line-through;
 }
 .ptrack-note{
@@ -1534,7 +1534,7 @@
   border:none;
   background:transparent;
   font-size:11.5px;
-  color:#5b6472;
+  color:#6b6555;
   margin-top:2px;
   font-family:inherit;
   resize:none;
@@ -1543,11 +1543,11 @@
   display:block;
 }
 .ptrack-note::placeholder{
-  color:#8aa3ab;
+  color:#a39d87;
 }
 .ptrack-task .ticon{
   font-size:10px;
-  color:#5b6472;
+  color:#6b6555;
   opacity:0;
   cursor:pointer;
   padding:2px 4px;
@@ -1564,7 +1564,7 @@
   width:18px;
   height:18px;
   border-radius:50%;
-  border:2px solid #629BB5;
+  border:2px solid #11226D;
   flex:none;
   margin-top:1px;
   cursor:pointer;
@@ -1577,10 +1577,10 @@
   background:#fff;
 }
 .task-check:hover{
-  border-color:#4a7e96;
+  border-color:#0a1850;
 }
 .task-check.checked{
-  background:#629BB5;
-  border-color:#629BB5;
+  background:#11226D;
+  border-color:#11226D;
   color:#fff;
 }
